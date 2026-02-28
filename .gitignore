@@ -19,6 +19,9 @@ target/
 *.iml
 *.ipr
 
+### Windsurf ###
+.windsurf
+
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
