@@ -22,7 +22,7 @@ import static com.example.exchange.config.RabbitMQConfig.AUDIT_FAILED_ROUTING_KE
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("test")
 @Import(TestContainersConfig.class)
 class ExchangeMessagingIT {
