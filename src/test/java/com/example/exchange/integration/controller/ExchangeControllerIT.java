@@ -30,7 +30,7 @@ class ExchangeControllerIT extends ApiIntegrationTest {
     private static final String RATE_RESPONSE = """
             {
               "base": "USD",
-              "date": "2024-01-01",
+              "date": "2026-03-01",
               "rates": {
                 "EUR": 0.850000,
                 "GBP": 0.730000,

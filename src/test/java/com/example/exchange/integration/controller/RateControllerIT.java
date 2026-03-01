@@ -25,7 +25,7 @@ class RateControllerIT extends ApiIntegrationTest {
     private static final String USD_RATES_RESPONSE = """
             {
               "base": "USD",
-              "date": "2024-01-01",
+              "date": "2026-03-01",
               "rates": {
                 "EUR": 0.850000,
                 "GBP": 0.730000
@@ -36,7 +36,7 @@ class RateControllerIT extends ApiIntegrationTest {
     private static final String EUR_RATES_RESPONSE = """
             {
               "base": "EUR",
-              "date": "2024-01-01",
+              "date": "2026-03-01",
               "rates": {
                 "USD": 1.180000,
                 "GBP": 0.860000
@@ -142,7 +142,7 @@ class RateControllerIT extends ApiIntegrationTest {
                 .willReturn(okJson("""
                         {
                           "base": "GBP",
-                          "date": "2024-01-01",
+                          "date": "2026-03-01",
                           "rates": { "USD": 1.370000 }
                         }
                         """)));
