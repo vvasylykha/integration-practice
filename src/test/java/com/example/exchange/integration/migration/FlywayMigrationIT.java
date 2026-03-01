@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FlywayMigrationIT {
 
     @Autowired
-    Flyway flyway;
+    private Flyway flyway;
 
     @Test
     void shouldApplyAllMigrationsSuccessfully() {

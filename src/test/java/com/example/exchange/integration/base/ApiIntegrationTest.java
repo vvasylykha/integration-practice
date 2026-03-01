@@ -11,7 +11,7 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Import(TestContainersConfig.class)
-public abstract class BaseIntegrationTest {
+public abstract class ApiIntegrationTest {
 
     @LocalServerPort
     private int port;

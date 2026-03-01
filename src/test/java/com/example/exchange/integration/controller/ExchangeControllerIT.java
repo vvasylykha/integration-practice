@@ -1,6 +1,6 @@
 package com.example.exchange.integration.controller;
 
-import com.example.exchange.integration.base.BaseIntegrationTest;
+import com.example.exchange.integration.base.ApiIntegrationTest;
 import com.example.exchange.repository.ExchangeRepository;
 import com.example.exchange.repository.UserBalanceRepository;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
@@ -19,9 +20,13 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
 @WireMockTest(httpPort = 8099)
-class ExchangeControllerIT extends BaseIntegrationTest {
+class ExchangeControllerIT extends ApiIntegrationTest {
 
     private static final String TEST_USER = "exchange-test-user";
+
+    private static final double INITIAL_BALANCE = 1000.00;
+    private static final double INSUFFICIENT_AMOUNT = 9999.00;
+    private static final Long NON_EXISTENT_ID = 999999L;
     private static final String RATE_RESPONSE = """
             {
               "base": "USD",
@@ -45,7 +50,7 @@ class ExchangeControllerIT extends BaseIntegrationTest {
         stubFor(get(urlPathEqualTo("/USD"))
                 .willReturn(okJson(RATE_RESPONSE)));
 
-        depositBalance(TEST_USER, "USD", 1000.00);
+        depositBalance(TEST_USER, "USD", INITIAL_BALANCE);
     }
 
     @AfterEach
@@ -68,10 +73,10 @@ class ExchangeControllerIT extends BaseIntegrationTest {
                           "amount": 100.00
                         }
                         """.formatted(TEST_USER))
-        .when()
+                .when()
                 .post("/api/v1/exchanges")
-        .then()
-                .statusCode(201)
+                .then()
+                .statusCode(HttpStatus.CREATED.value())
                 .body("id", notNullValue())
                 .body("userId", equalTo(TEST_USER))
                 .body("fromCurrency", equalTo("USD"))
@@ -94,17 +99,17 @@ class ExchangeControllerIT extends BaseIntegrationTest {
                           "amount": 100.00
                         }
                         """.formatted(TEST_USER))
-        .when()
+                .when()
                 .post("/api/v1/exchanges")
-        .then()
-                .statusCode(201);
+                .then()
+                .statusCode(HttpStatus.CREATED.value());
 
         given()
-        .when()
+                .when()
                 .get("/api/v1/balances/{userId}/{currency}", TEST_USER, "USD")
-        .then()
-                .statusCode(200)
-                .body("balance", lessThan(1000.00f));
+                .then()
+                .statusCode(HttpStatus.OK.value())
+                .body("balance", lessThan((float) INITIAL_BALANCE));
     }
 
     @Test
@@ -116,14 +121,14 @@ class ExchangeControllerIT extends BaseIntegrationTest {
                           "userId": "%s",
                           "fromCurrency": "USD",
                           "toCurrency": "EUR",
-                          "amount": 9999.00
+                          "amount": %.2f
                         }
-                        """.formatted(TEST_USER))
-        .when()
+                        """.formatted(TEST_USER, INSUFFICIENT_AMOUNT))
+                .when()
                 .post("/api/v1/exchanges")
-        .then()
-                .statusCode(400)
-                .body("status", equalTo(400))
+                .then()
+                .statusCode(HttpStatus.BAD_REQUEST.value())
+                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
                 .body("message", notNullValue())
                 .body("timestamp", notNullValue());
     }
@@ -140,11 +145,11 @@ class ExchangeControllerIT extends BaseIntegrationTest {
                           "amount": 100.00
                         }
                         """.formatted(TEST_USER))
-        .when()
+                .when()
                 .post("/api/v1/exchanges")
-        .then()
-                .statusCode(400)
-                .body("status", equalTo(400))
+                .then()
+                .statusCode(HttpStatus.BAD_REQUEST.value())
+                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
                 .body("message", notNullValue())
                 .body("timestamp", notNullValue());
     }
@@ -161,11 +166,11 @@ class ExchangeControllerIT extends BaseIntegrationTest {
                           "amount": 100.00
                         }
                         """)
-        .when()
+                .when()
                 .post("/api/v1/exchanges")
-        .then()
-                .statusCode(400)
-                .body("status", equalTo(400))
+                .then()
+                .statusCode(HttpStatus.BAD_REQUEST.value())
+                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
                 .body("errors", notNullValue())
                 .body("timestamp", notNullValue());
     }
@@ -182,17 +187,17 @@ class ExchangeControllerIT extends BaseIntegrationTest {
                           "amount": 50.00
                         }
                         """.formatted(TEST_USER))
-        .when()
+                .when()
                 .post("/api/v1/exchanges")
-        .then()
-                .statusCode(201)
+                .then()
+                .statusCode(HttpStatus.CREATED.value())
                 .extract().path("id");
 
         given()
-        .when()
+                .when()
                 .get("/api/v1/exchanges/{id}", exchangeId)
-        .then()
-                .statusCode(200)
+                .then()
+                .statusCode(HttpStatus.OK.value())
                 .body("id", equalTo(exchangeId))
                 .body("userId", equalTo(TEST_USER));
     }
@@ -200,11 +205,11 @@ class ExchangeControllerIT extends BaseIntegrationTest {
     @Test
     void shouldReturn404WhenExchangeNotFound() {
         given()
-        .when()
-                .get("/api/v1/exchanges/{id}", 999999L)
-        .then()
-                .statusCode(404)
-                .body("status", equalTo(404))
+                .when()
+                .get("/api/v1/exchanges/{id}", NON_EXISTENT_ID)
+                .then()
+                .statusCode(HttpStatus.NOT_FOUND.value())
+                .body("status", equalTo(HttpStatus.NOT_FOUND.value()))
                 .body("message", notNullValue())
                 .body("timestamp", notNullValue());
     }
@@ -216,22 +221,23 @@ class ExchangeControllerIT extends BaseIntegrationTest {
                 .body("""
                         {"userId":"%s","fromCurrency":"USD","toCurrency":"EUR","amount":10.00}
                         """.formatted(TEST_USER))
-        .when().post("/api/v1/exchanges").then().statusCode(201);
+                .when().post("/api/v1/exchanges")
+                .then().statusCode(HttpStatus.CREATED.value());
 
         given()
                 .contentType(ContentType.JSON)
                 .body("""
                         {"userId":"%s","fromCurrency":"USD","toCurrency":"GBP","amount":10.00}
                         """.formatted(TEST_USER))
-        .when().post("/api/v1/exchanges").then().statusCode(201);
+                .when().post("/api/v1/exchanges").then().statusCode(HttpStatus.CREATED.value());
 
         given()
                 .queryParam("page", 0)
                 .queryParam("size", 1)
-        .when()
+                .when()
                 .get("/api/v1/exchanges/user/{userId}", TEST_USER)
-        .then()
-                .statusCode(200)
+                .then()
+                .statusCode(HttpStatus.OK.value())
                 .body("$", hasSize(1));
     }
 
@@ -250,11 +256,11 @@ class ExchangeControllerIT extends BaseIntegrationTest {
                           "amount": 100.00
                         }
                         """.formatted(TEST_USER))
-        .when()
+                .when()
                 .post("/api/v1/exchanges")
-        .then()
-                .statusCode(503)
-                .body("status", equalTo(503))
+                .then()
+                .statusCode(HttpStatus.SERVICE_UNAVAILABLE.value())
+                .body("status", equalTo(HttpStatus.SERVICE_UNAVAILABLE.value()))
                 .body("message", notNullValue())
                 .body("timestamp", notNullValue());
     }
@@ -269,9 +275,9 @@ class ExchangeControllerIT extends BaseIntegrationTest {
                           "amount": %s
                         }
                         """.formatted(userId, currency, amount))
-        .when()
+                .when()
                 .post("/api/v1/balances/deposit")
-        .then()
-                .statusCode(201);
+                .then()
+                .statusCode(HttpStatus.CREATED.value());
     }
 }

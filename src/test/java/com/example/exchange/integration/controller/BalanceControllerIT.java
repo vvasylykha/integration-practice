@@ -1,16 +1,17 @@
 package com.example.exchange.integration.controller;
 
-import com.example.exchange.integration.base.BaseIntegrationTest;
+import com.example.exchange.integration.base.ApiIntegrationTest;
 import com.example.exchange.repository.UserBalanceRepository;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
-class BalanceControllerIT extends BaseIntegrationTest {
+class BalanceControllerIT extends ApiIntegrationTest {
 
     private static final String TEST_USER = "balance-test-user";
 
@@ -37,7 +38,7 @@ class BalanceControllerIT extends BaseIntegrationTest {
         .when()
                 .post("/api/v1/balances/deposit")
         .then()
-                .statusCode(201)
+                .statusCode(HttpStatus.CREATED.value())
                 .body("userId", equalTo(TEST_USER))
                 .body("currency", equalTo("USD"))
                 .body("balance", comparesEqualTo(500.00f));
@@ -52,7 +53,7 @@ class BalanceControllerIT extends BaseIntegrationTest {
         .when()
                 .get("/api/v1/balances/{userId}", TEST_USER)
         .then()
-                .statusCode(200)
+                .statusCode(HttpStatus.OK.value())
                 .body("$", hasSize(2))
                 .body("currency", containsInAnyOrder("USD", "EUR"));
     }
@@ -65,7 +66,7 @@ class BalanceControllerIT extends BaseIntegrationTest {
         .when()
                 .get("/api/v1/balances/{userId}/{currency}", TEST_USER, "GBP")
         .then()
-                .statusCode(200)
+                .statusCode(HttpStatus.OK.value())
                 .body("userId", equalTo(TEST_USER))
                 .body("currency", equalTo("GBP"))
                 .body("balance", comparesEqualTo(350.00f));
@@ -77,8 +78,8 @@ class BalanceControllerIT extends BaseIntegrationTest {
         .when()
                 .get("/api/v1/balances/{userId}/{currency}", "non-existent-user", "USD")
         .then()
-                .statusCode(404)
-                .body("status", equalTo(404))
+                .statusCode(HttpStatus.NOT_FOUND.value())
+                .body("status", equalTo(HttpStatus.NOT_FOUND.value()))
                 .body("message", notNullValue())
                 .body("timestamp", notNullValue());
     }
@@ -89,7 +90,7 @@ class BalanceControllerIT extends BaseIntegrationTest {
         .when()
                 .get("/api/v1/balances/{userId}", "user-with-no-balances")
         .then()
-                .statusCode(200)
+                .statusCode(HttpStatus.OK.value())
                 .body("$", empty());
     }
 
@@ -99,8 +100,8 @@ class BalanceControllerIT extends BaseIntegrationTest {
         .when()
                 .get("/api/v1/balances/{userId}/{currency}", TEST_USER, "INVALID")
         .then()
-                .statusCode(400)
-                .body("status", equalTo(400))
+                .statusCode(HttpStatus.BAD_REQUEST.value())
+                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
                 .body("errors", notNullValue())
                 .body("timestamp", notNullValue());
     }
@@ -119,8 +120,8 @@ class BalanceControllerIT extends BaseIntegrationTest {
         .when()
                 .post("/api/v1/balances/deposit")
         .then()
-                .statusCode(400)
-                .body("status", equalTo(400))
+                .statusCode(HttpStatus.BAD_REQUEST.value())
+                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
                 .body("errors", notNullValue())
                 .body("timestamp", notNullValue());
     }
@@ -139,8 +140,8 @@ class BalanceControllerIT extends BaseIntegrationTest {
         .when()
                 .post("/api/v1/balances/deposit")
         .then()
-                .statusCode(400)
-                .body("status", equalTo(400))
+                .statusCode(HttpStatus.BAD_REQUEST.value())
+                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
                 .body("errors", notNullValue());
     }
 
@@ -157,6 +158,6 @@ class BalanceControllerIT extends BaseIntegrationTest {
         .when()
                 .post("/api/v1/balances/deposit")
         .then()
-                .statusCode(201);
+                .statusCode(HttpStatus.CREATED.value());
     }
 }

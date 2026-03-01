@@ -1,13 +1,13 @@
 package com.example.exchange.integration.controller;
 
-import com.example.exchange.integration.base.BaseIntegrationTest;
+import com.example.exchange.integration.base.ApiIntegrationTest;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
-import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.http.HttpStatus;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
@@ -20,7 +20,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
 @WireMockTest(httpPort = 8099)
-class RateControllerIT extends BaseIntegrationTest {
+class RateControllerIT extends ApiIntegrationTest {
 
     private static final String USD_RATES_RESPONSE = """
             {
@@ -66,7 +66,7 @@ class RateControllerIT extends BaseIntegrationTest {
         .when()
                 .get("/api/v1/rates/{base}/{target}", "USD", "EUR")
         .then()
-                .statusCode(200)
+                .statusCode(HttpStatus.OK.value())
                 .body("baseCurrency", equalTo("USD"))
                 .body("targetCurrency", equalTo("EUR"))
                 .body("rate", comparesEqualTo(0.85f))
@@ -82,7 +82,7 @@ class RateControllerIT extends BaseIntegrationTest {
         .when()
                 .get("/api/v1/rates/{base}", "USD")
         .then()
-                .statusCode(200)
+                .statusCode(HttpStatus.OK.value())
                 .body("EUR", comparesEqualTo(0.85f))
                 .body("GBP", comparesEqualTo(0.73f));
     }
@@ -92,8 +92,8 @@ class RateControllerIT extends BaseIntegrationTest {
         stubFor(get(urlPathEqualTo("/EUR"))
                 .willReturn(okJson(EUR_RATES_RESPONSE)));
 
-        given().when().get("/api/v1/rates/{base}/{target}", "EUR", "USD").then().statusCode(200);
-        given().when().get("/api/v1/rates/{base}/{target}", "EUR", "USD").then().statusCode(200);
+        given().when().get("/api/v1/rates/{base}/{target}", "EUR", "USD").then().statusCode(HttpStatus.OK.value());
+        given().when().get("/api/v1/rates/{base}/{target}", "EUR", "USD").then().statusCode(HttpStatus.OK.value());
 
         verify(1, getRequestedFor(urlPathEqualTo("/EUR")));
     }
@@ -104,8 +104,8 @@ class RateControllerIT extends BaseIntegrationTest {
         .when()
                 .get("/api/v1/rates/{base}/{target}", "INVALID", "EUR")
         .then()
-                .statusCode(400)
-                .body("status", equalTo(400))
+                .statusCode(HttpStatus.BAD_REQUEST.value())
+                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
                 .body("errors", notNullValue())
                 .body("timestamp", notNullValue());
     }
@@ -116,8 +116,8 @@ class RateControllerIT extends BaseIntegrationTest {
         .when()
                 .get("/api/v1/rates/{base}/{target}", "USD", "XX")
         .then()
-                .statusCode(400)
-                .body("status", equalTo(400))
+                .statusCode(HttpStatus.BAD_REQUEST.value())
+                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
                 .body("errors", notNullValue())
                 .body("timestamp", notNullValue());
     }
@@ -151,7 +151,7 @@ class RateControllerIT extends BaseIntegrationTest {
         .when()
                 .get("/api/v1/rates/{base}/{target}", "GBP", "USD")
         .then()
-                .statusCode(200)
+                .statusCode(HttpStatus.OK.value())
                 .body("rate", notNullValue());
 
         verify(3, getRequestedFor(urlPathEqualTo("/GBP")));
@@ -166,8 +166,8 @@ class RateControllerIT extends BaseIntegrationTest {
         .when()
                 .get("/api/v1/rates/{base}/{target}", "JPY", "USD")
         .then()
-                .statusCode(503)
-                .body("status", equalTo(503))
+                .statusCode(HttpStatus.SERVICE_UNAVAILABLE.value())
+                .body("status", equalTo(HttpStatus.SERVICE_UNAVAILABLE.value()))
                 .body("message", notNullValue())
                 .body("timestamp", notNullValue());
 
