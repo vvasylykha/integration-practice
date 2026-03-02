@@ -1,0 +1,229 @@
+{
+	"info": {
+		"_postman_id": "1-4-integration-test-scratch-collection",
+		"name": "1-4 integration test scratch API",
+		"description": "Complete API collection for currency exchange service",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Balance API",
+			"item": [
+				{
+					"name": "Get User Balances",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/balances/:userId",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "balances", ":userId"],
+							"variable": [
+								{
+									"key": "userId",
+									"value": "user123",
+									"description": "User ID"
+								}
+							]
+						},
+						"description": "Get all balances for a user"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Balance by Currency",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/balances/:userId/:currency",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "balances", ":userId", ":currency"],
+							"variable": [
+								{
+									"key": "userId",
+									"value": "user123",
+									"description": "User ID"
+								},
+								{
+									"key": "currency",
+									"value": "USD",
+									"description": "Currency code (USD, EUR, UAH)"
+								}
+							]
+						},
+						"description": "Get user balance for a specific currency"
+					},
+					"response": []
+				},
+				{
+					"name": "Deposit",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"user123\",\n  \"currency\": \"USD\",\n  \"amount\": 1000.00\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/balances/deposit",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "balances", "deposit"]
+						},
+						"description": "Deposit funds to user balance"
+					},
+					"response": []
+				}
+			],
+			"description": "API for managing user balances"
+		},
+		{
+			"name": "Exchange API",
+			"item": [
+				{
+					"name": "Perform Exchange",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"user123\",\n  \"fromCurrency\": \"USD\",\n  \"toCurrency\": \"EUR\",\n  \"amount\": 100.00\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/exchanges",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "exchanges"]
+						},
+						"description": "Perform currency exchange"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Exchange by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/exchanges/:id",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "exchanges", ":id"],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1",
+									"description": "Exchange ID"
+								}
+							]
+						},
+						"description": "Get exchange information by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Exchanges",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/exchanges/user/:userId?page=0&size=20",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "exchanges", "user", ":userId"],
+							"query": [
+								{
+									"key": "page",
+									"value": "0",
+									"description": "Page number (default 0)"
+								},
+								{
+									"key": "size",
+									"value": "20",
+									"description": "Page size (default 20)"
+								}
+							],
+							"variable": [
+								{
+									"key": "userId",
+									"value": "user123",
+									"description": "User ID"
+								}
+							]
+						},
+						"description": "Get user exchange history with pagination"
+					},
+					"response": []
+				}
+			],
+			"description": "API for currency exchange operations"
+		},
+		{
+			"name": "Rate API",
+			"item": [
+				{
+					"name": "Get Exchange Rate",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/rates/:base/:target",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "rates", ":base", ":target"],
+							"variable": [
+								{
+									"key": "base",
+									"value": "USD",
+									"description": "Base currency (USD, EUR, UAH)"
+								},
+								{
+									"key": "target",
+									"value": "EUR",
+									"description": "Target currency (USD, EUR, UAH)"
+								}
+							]
+						},
+						"description": "Get exchange rate between two currencies"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Rates for Base Currency",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/rates/:base",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "rates", ":base"],
+							"variable": [
+								{
+									"key": "base",
+									"value": "USD",
+									"description": "Base currency (USD, EUR, UAH)"
+								}
+							]
+						},
+						"description": "Get all exchange rates for base currency"
+					},
+					"response": []
+				}
+			],
+			"description": "API for retrieving currency exchange rates"
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		}
+	]
+}
