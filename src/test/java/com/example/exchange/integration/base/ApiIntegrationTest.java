@@ -1,24 +1,33 @@
 package com.example.exchange.integration.base;
 
-import com.example.exchange.integration.config.TestContainersConfig;
-import io.restassured.RestAssured;
 import org.junit.jupiter.api.BeforeEach;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-@Import(TestContainersConfig.class)
+/**
+ * Abstract base class for full-stack HTTP integration tests.
+ *
+ * <p><b>Task:</b> annotate this class so that:
+ * <ul>
+ *   <li>The full Spring application context starts on a randomly assigned port.</li>
+ *   <li>The {@code "test"} Spring profile is activated.</li>
+ *   <li>{@code TestContainersConfig} is imported to register PostgreSQL, Redis,
+ *       and RabbitMQ containers.</li>
+ * </ul>
+ *
+ * <p>All concrete IT classes extend this base class.
+ * RestAssured must be configured for each test in the {@code @BeforeEach} method.
+ */
 public abstract class ApiIntegrationTest {
 
     @LocalServerPort
     private int port;
 
+    /**
+     * Configure RestAssured to target the randomly assigned server port
+     * and enable request/response logging on assertion failures.
+     */
     @BeforeEach
     void setUpRestAssured() {
-        RestAssured.port = port;
-        RestAssured.enableLoggingOfRequestAndResponseIfValidationFails();
+        // TODO: implement
     }
 }

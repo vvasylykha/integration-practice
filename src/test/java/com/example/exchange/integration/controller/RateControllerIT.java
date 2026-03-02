@@ -1,176 +1,107 @@
 package com.example.exchange.integration.controller;
 
 import com.example.exchange.integration.base.ApiIntegrationTest;
-import com.github.tomakehurst.wiremock.junit5.WireMockTest;
-import com.github.tomakehurst.wiremock.stubbing.Scenario;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.CacheManager;
-import org.springframework.http.HttpStatus;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.get;
-import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
-import static com.github.tomakehurst.wiremock.client.WireMock.serverError;
-import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
-import static com.github.tomakehurst.wiremock.client.WireMock.verify;
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
-
-@WireMockTest(httpPort = 8099)
+/**
+ * Integration tests for the Rate REST API ({@code /api/v1/rates}),
+ *
+ * <p><b>Task:</b> add the class-level annotation that starts a WireMock HTTP server
+ * on port {@code 8099} before each test. The port matches {@code rate-api.base-url}
+ * in {@code application-test.properties}. Stubs are reset between tests, so each
+ * test must register its own.
+ */
 class RateControllerIT extends ApiIntegrationTest {
 
-    private static final String USD_RATES_RESPONSE = """
-            {
-              "base": "USD",
-              "date": "2026-03-01",
-              "rates": {
-                "EUR": 0.850000,
-                "GBP": 0.730000
-              }
-            }
-            """;
-
-    private static final String EUR_RATES_RESPONSE = """
-            {
-              "base": "EUR",
-              "date": "2026-03-01",
-              "rates": {
-                "USD": 1.180000,
-                "GBP": 0.860000
-              }
-            }
-            """;
-
-    @Autowired
-    private CacheManager cacheManager;
-
+    /**
+     * Before each test: clear all Spring Cache entries to prevent cached rates
+     * from a previous test being served instead of the registered WireMock response.
+     */
     @BeforeEach
     void clearCache() {
-        cacheManager.getCacheNames().forEach(name -> {
-            var cache = cacheManager.getCache(name);
-            if (cache != null) {
-                cache.clear();
-            }
-        });
+        // TODO: implement
     }
 
+    /**
+     * Requesting the rate for a valid base and target currency should return HTTP 200 OK
+     * with {@code baseCurrency}, {@code targetCurrency}, {@code rate}, and {@code timestamp}
+     * in the response body.
+     *
+     * <p>Endpoint: {@code GET /api/v1/rates/{base}/{target}}
+     */
     @Test
     void shouldReturnExchangeRate() {
-        stubFor(get(urlPathEqualTo("/USD"))
-                .willReturn(okJson(USD_RATES_RESPONSE)));
-
-        given()
-        .when()
-                .get("/api/v1/rates/{base}/{target}", "USD", "EUR")
-        .then()
-                .statusCode(HttpStatus.OK.value())
-                .body("baseCurrency", equalTo("USD"))
-                .body("targetCurrency", equalTo("EUR"))
-                .body("rate", comparesEqualTo(0.85f))
-                .body("timestamp", notNullValue());
+        // TODO: implement
     }
 
+    /**
+     * Requesting all rates for a base currency should return HTTP 200 OK with a JSON map
+     * of target currency codes to their rate values.
+     *
+     * <p>Endpoint: {@code GET /api/v1/rates/{base}}
+     */
     @Test
     void shouldReturnAllRatesForBase() {
-        stubFor(get(urlPathEqualTo("/USD"))
-                .willReturn(okJson(USD_RATES_RESPONSE)));
-
-        given()
-        .when()
-                .get("/api/v1/rates/{base}", "USD")
-        .then()
-                .statusCode(HttpStatus.OK.value())
-                .body("EUR", comparesEqualTo(0.85f))
-                .body("GBP", comparesEqualTo(0.73f));
+        // TODO: implement
     }
 
+    /**
+     * Requesting the same rate twice should result in only one call to the external API;
+     * the second request must be served from cache.
+     * Verify with WireMock that the external endpoint was called exactly once.
+     *
+     * <p>Endpoint: {@code GET /api/v1/rates/{base}/{target}}
+     */
     @Test
     void shouldCacheRateAndCallApiOnlyOnce() {
-        stubFor(get(urlPathEqualTo("/EUR"))
-                .willReturn(okJson(EUR_RATES_RESPONSE)));
-
-        given().when().get("/api/v1/rates/{base}/{target}", "EUR", "USD").then().statusCode(HttpStatus.OK.value());
-        given().when().get("/api/v1/rates/{base}/{target}", "EUR", "USD").then().statusCode(HttpStatus.OK.value());
-
-        verify(1, getRequestedFor(urlPathEqualTo("/EUR")));
+        // TODO: implement
     }
 
+    /**
+     * A request with an invalid (non 3-letter) base currency code should return
+     * HTTP 400 Bad Request with {@code status}, {@code errors}, and {@code timestamp}.
+     *
+     * <p>Endpoint: {@code GET /api/v1/rates/{base}/{target}}
+     */
     @Test
     void shouldReturn400OnInvalidBaseCode() {
-        given()
-        .when()
-                .get("/api/v1/rates/{base}/{target}", "INVALID", "EUR")
-        .then()
-                .statusCode(HttpStatus.BAD_REQUEST.value())
-                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
-                .body("errors", notNullValue())
-                .body("timestamp", notNullValue());
+        // TODO: implement
     }
 
+    /**
+     * A request with an invalid (non 3-letter) target currency code should return
+     * HTTP 400 Bad Request with {@code status}, {@code errors}, and {@code timestamp}.
+     *
+     * <p>Endpoint: {@code GET /api/v1/rates/{base}/{target}}
+     */
     @Test
     void shouldReturn400OnInvalidTargetCode() {
-        given()
-        .when()
-                .get("/api/v1/rates/{base}/{target}", "USD", "XX")
-        .then()
-                .statusCode(HttpStatus.BAD_REQUEST.value())
-                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
-                .body("errors", notNullValue())
-                .body("timestamp", notNullValue());
+        // TODO: implement
     }
 
+    /**
+     * When the external API fails on the first two attempts and succeeds on the third,
+     * the endpoint should return HTTP 200 OK and the external API should have been
+     * called exactly 3 times.
+     * Use WireMock stateful scenarios to simulate the sequence of failures and success.
+     *
+     * <p>Endpoint: {@code GET /api/v1/rates/{base}/{target}}
+     */
     @Test
     void shouldRetryAndSucceedAfterTransientFailure() {
-        stubFor(get(urlPathEqualTo("/GBP"))
-                .inScenario("retry-success")
-                .whenScenarioStateIs(Scenario.STARTED)
-                .willReturn(serverError())
-                .willSetStateTo("second-attempt"));
-
-        stubFor(get(urlPathEqualTo("/GBP"))
-                .inScenario("retry-success")
-                .whenScenarioStateIs("second-attempt")
-                .willReturn(serverError())
-                .willSetStateTo("third-attempt"));
-
-        stubFor(get(urlPathEqualTo("/GBP"))
-                .inScenario("retry-success")
-                .whenScenarioStateIs("third-attempt")
-                .willReturn(okJson("""
-                        {
-                          "base": "GBP",
-                          "date": "2026-03-01",
-                          "rates": { "USD": 1.370000 }
-                        }
-                        """)));
-
-        given()
-        .when()
-                .get("/api/v1/rates/{base}/{target}", "GBP", "USD")
-        .then()
-                .statusCode(HttpStatus.OK.value())
-                .body("rate", notNullValue());
-
-        verify(3, getRequestedFor(urlPathEqualTo("/GBP")));
+        // TODO: implement
     }
 
+    /**
+     * When all retry attempts are exhausted (external API always returns 500), the endpoint
+     * should return HTTP 503 Service Unavailable. Verify that the external API was called
+     * exactly 3 times (max retry attempts).
+     *
+     * <p>Endpoint: {@code GET /api/v1/rates/{base}/{target}}
+     */
     @Test
     void shouldReturn503AfterMaxRetryAttemptsExhausted() {
-        stubFor(get(urlPathEqualTo("/JPY"))
-                .willReturn(serverError()));
-
-        given()
-        .when()
-                .get("/api/v1/rates/{base}/{target}", "JPY", "USD")
-        .then()
-                .statusCode(HttpStatus.SERVICE_UNAVAILABLE.value())
-                .body("status", equalTo(HttpStatus.SERVICE_UNAVAILABLE.value()))
-                .body("message", notNullValue())
-                .body("timestamp", notNullValue());
-
-        verify(3, getRequestedFor(urlPathEqualTo("/JPY")));
+        // TODO: implement
     }
 }

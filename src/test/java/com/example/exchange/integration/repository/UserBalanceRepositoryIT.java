@@ -1,112 +1,98 @@
 package com.example.exchange.integration.repository;
 
-import com.example.exchange.integration.config.TestContainersConfig;
-import com.example.exchange.model.UserBalance;
-import com.example.exchange.repository.UserBalanceRepository;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 
-import java.math.BigDecimal;
-import java.util.List;
 import java.util.Optional;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-@DataJpaTest
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@ActiveProfiles("test")
-@Import(TestContainersConfig.class)
+/**
+ * Integration tests for {@link com.example.exchange.repository.UserBalanceRepository},
+ * covering query methods, pessimistic/optimistic locking, and existence checks
+ * against a real PostgreSQL database.
+ *
+ * <p><b>Task:</b> annotate this class to configure a JPA test slice:
+ * <ul>
+ *   <li>Use the Spring Boot slice annotation that loads only JPA components
+ *       (no full application context).</li>
+ *   <li>Disable auto-replacement of the datasource with an in-memory database
+ *       so tests run against real PostgreSQL (required for pessimistic locking).</li>
+ *   <li>Activate the {@code "test"} profile.</li>
+ *   <li>Import {@code TestContainersConfig}.</li>
+ * </ul>
+ *
+ * <p>Also declare and inject the repository field. Each test runs in a transaction
+ * that is rolled back automatically — no manual cleanup needed.
+ */
 class UserBalanceRepositoryIT {
 
-    @Autowired
-    private UserBalanceRepository userBalanceRepository;
-
+    /**
+     * Finding a balance by userId and currency should return a present {@link Optional}
+     * with the matching {@code id} and {@code balance} amount.
+     */
     @Test
     void shouldFindBalanceByUserIdAndCurrency() {
-        UserBalance saved = userBalanceRepository.save(balance("user-1", "USD", "100.00"));
-
-        Optional<UserBalance> found = userBalanceRepository.findByUserIdAndCurrency("user-1", "USD");
-
-        assertThat(found).isPresent();
-        assertThat(found.get().getId()).isEqualTo(saved.getId());
-        assertThat(found.get().getBalance()).isEqualByComparingTo("100.00");
+        // TODO: implement
     }
 
+    /**
+     * Finding a balance for a userId and currency that was never saved
+     * should return an empty {@link Optional} without throwing an exception.
+     */
     @Test
     void shouldReturnEmptyWhenBalanceNotFound() {
-        Optional<UserBalance> found = userBalanceRepository.findByUserIdAndCurrency("unknown-user", "USD");
-
-        assertThat(found).isEmpty();
+        // TODO: implement
     }
 
+    /**
+     * Finding all balances for a user who has two currencies should return exactly
+     * those two entries and must not include records belonging to other users.
+     */
     @Test
     void shouldFindAllBalancesForUser() {
-        userBalanceRepository.save(balance("user-2", "USD", "100.00"));
-        userBalanceRepository.save(balance("user-2", "EUR", "200.00"));
-        userBalanceRepository.save(balance("user-3", "USD", "50.00"));
-
-        List<UserBalance> balances = userBalanceRepository.findByUserId("user-2");
-
-        assertThat(balances).hasSize(2);
-        assertThat(balances).extracting(UserBalance::getCurrency)
-                .containsExactlyInAnyOrder("USD", "EUR");
+        // TODO: implement
     }
 
+    /**
+     * Finding all balances for a user who has no records should return an empty list.
+     */
     @Test
     void shouldReturnEmptyListWhenUserHasNoBalances() {
-        List<UserBalance> balances = userBalanceRepository.findByUserId("no-balances-user");
-
-        assertThat(balances).isEmpty();
+        // TODO: implement
     }
 
+    /**
+     * Querying with a pessimistic write lock ({@code SELECT ... FOR UPDATE})
+     * should return the existing balance entity with the correct amount.
+     */
     @Test
     void shouldAcquirePessimisticLockForUpdate() {
-        userBalanceRepository.save(balance("user-4", "GBP", "500.00"));
-
-        Optional<UserBalance> found = userBalanceRepository
-                .findByUserIdAndCurrencyForUpdate("user-4", "GBP");
-
-        assertThat(found).isPresent();
-        assertThat(found.get().getBalance()).isEqualByComparingTo("500.00");
+        // TODO: implement
     }
 
+    /**
+     * Querying with a pessimistic write lock for a record that does not exist
+     * should return an empty {@link Optional} without throwing an exception.
+     */
     @Test
     void shouldReturnEmptyWhenLockingNonExistentBalance() {
-        Optional<UserBalance> found = userBalanceRepository
-                .findByUserIdAndCurrencyForUpdate("ghost-user", "USD");
-
-        assertThat(found).isEmpty();
+        // TODO: implement
     }
 
+    /**
+     * After saving a new entity its {@code version} should be {@code 0};
+     * after modifying and flushing it the {@code version} should be incremented to {@code 1}.
+     * Verifies that JPA optimistic locking ({@code @Version}) works correctly.
+     */
     @Test
     void shouldSaveAndIncrementVersionOnUpdate() {
-        UserBalance saved = userBalanceRepository.save(balance("user-5", "EUR", "300.00"));
-        assertThat(saved.getVersion()).isZero();
-
-        saved.setBalance(new BigDecimal("350.00"));
-        UserBalance updated = userBalanceRepository.saveAndFlush(saved);
-
-        assertThat(updated.getVersion()).isEqualTo(1L);
+        // TODO: implement
     }
 
+    /**
+     * Existence check for a currency that was saved should return {@code true};
+     * existence check for a currency that was never saved for that user should return {@code false}.
+     */
     @Test
     void shouldCheckExistenceByUserIdAndCurrency() {
-        userBalanceRepository.save(balance("user-6", "JPY", "10000.00"));
-
-        assertThat(userBalanceRepository.existsByUserIdAndCurrency("user-6", "JPY")).isTrue();
-        assertThat(userBalanceRepository.existsByUserIdAndCurrency("user-6", "USD")).isFalse();
-    }
-
-    private UserBalance balance(String userId, String currency, String amount) {
-        return UserBalance.builder()
-                .userId(userId)
-                .currency(currency)
-                .balance(new BigDecimal(amount))
-                .lockedBalance(BigDecimal.ZERO)
-                .build();
+        // TODO: implement
     }
 }

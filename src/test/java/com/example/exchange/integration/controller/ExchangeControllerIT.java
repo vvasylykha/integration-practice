@@ -1,283 +1,141 @@
 package com.example.exchange.integration.controller;
 
 import com.example.exchange.integration.base.ApiIntegrationTest;
-import com.example.exchange.repository.ExchangeRepository;
-import com.example.exchange.repository.UserBalanceRepository;
-import com.github.tomakehurst.wiremock.junit5.WireMockTest;
-import io.restassured.http.ContentType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.get;
-import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
-import static com.github.tomakehurst.wiremock.client.WireMock.serverError;
-import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.*;
-
-@WireMockTest(httpPort = 8099)
+/**
+ * Integration tests for the Exchange REST API ({@code /api/v1/exchanges}).
+ *
+ * <p><b>Task:</b> add the class-level annotation that starts a WireMock HTTP server
+ * on port {@code 8099} before each test. This port matches {@code rate-api.base-url}
+ * in {@code application-test.properties} and intercepts outbound calls to the
+ * external exchange-rate provider.
+ */
 class ExchangeControllerIT extends ApiIntegrationTest {
 
-    private static final String TEST_USER = "exchange-test-user";
-
-    private static final double INITIAL_BALANCE = 1000.00;
-    private static final double INSUFFICIENT_AMOUNT = 9999.00;
-    private static final Long NON_EXISTENT_ID = 999999L;
-    private static final String RATE_RESPONSE = """
-            {
-              "base": "USD",
-              "date": "2026-03-01",
-              "rates": {
-                "EUR": 0.850000,
-                "GBP": 0.730000,
-                "USD": 1.000000
-              }
-            }
-            """;
-
-    @Autowired
-    private UserBalanceRepository userBalanceRepository;
-
-    @Autowired
-    private ExchangeRepository exchangeRepository;
-
+    /**
+     * Before each test: stub the external rate API to return known exchange rates for USD,
+     * and deposit an initial USD balance for the test user.
+     */
     @BeforeEach
     void setUpWireMockAndBalance() {
-        stubFor(get(urlPathEqualTo("/USD"))
-                .willReturn(okJson(RATE_RESPONSE)));
-
-        depositBalance(TEST_USER, "USD", INITIAL_BALANCE);
+        // TODO: implement
     }
 
+    /**
+     * After each test: delete all exchange and balance records for the test user.
+     * Delete exchanges before balances to respect foreign-key constraints.
+     */
     @AfterEach
     void cleanUp() {
-        exchangeRepository.findByUserId(TEST_USER)
-                .forEach(e -> exchangeRepository.deleteById(e.getId()));
-        userBalanceRepository.findByUserId(TEST_USER)
-                .forEach(b -> userBalanceRepository.deleteById(b.getId()));
+        // TODO: implement
     }
 
+    /**
+     * A valid USD→EUR exchange request should return HTTP 201 Created with
+     * {@code id}, {@code userId}, {@code fromCurrency}, {@code toCurrency},
+     * {@code amount}, {@code exchangeRate}, {@code commission}, and
+     * {@code status} ({@code "COMPLETED"}) in the response body.
+     *
+     * <p>Endpoint: {@code POST /api/v1/exchanges}
+     */
     @Test
     void shouldPerformExchangeSuccessfullyAndReturn201() {
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        {
-                          "userId": "%s",
-                          "fromCurrency": "USD",
-                          "toCurrency": "EUR",
-                          "amount": 100.00
-                        }
-                        """.formatted(TEST_USER))
-                .when()
-                .post("/api/v1/exchanges")
-                .then()
-                .statusCode(HttpStatus.CREATED.value())
-                .body("id", notNullValue())
-                .body("userId", equalTo(TEST_USER))
-                .body("fromCurrency", equalTo("USD"))
-                .body("toCurrency", equalTo("EUR"))
-                .body("amount", comparesEqualTo(100.00f))
-                .body("exchangeRate", comparesEqualTo(0.85f))
-                .body("commission", notNullValue())
-                .body("status", equalTo("COMPLETED"));
+        // TODO: implement
     }
 
+    /**
+     * After a successful USD→EUR exchange the source USD balance should be lower
+     * than the initially deposited amount.
+     *
+     * <p>Endpoints: {@code POST /api/v1/exchanges}, then
+     * {@code GET /api/v1/balances/{userId}/{currency}}
+     */
     @Test
     void shouldDeductBalanceAfterExchange() {
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        {
-                          "userId": "%s",
-                          "fromCurrency": "USD",
-                          "toCurrency": "EUR",
-                          "amount": 100.00
-                        }
-                        """.formatted(TEST_USER))
-                .when()
-                .post("/api/v1/exchanges")
-                .then()
-                .statusCode(HttpStatus.CREATED.value());
-
-        given()
-                .when()
-                .get("/api/v1/balances/{userId}/{currency}", TEST_USER, "USD")
-                .then()
-                .statusCode(HttpStatus.OK.value())
-                .body("balance", lessThan((float) INITIAL_BALANCE));
+        // TODO: implement
     }
 
+    /**
+     * An exchange with an amount exceeding the available balance should return
+     * HTTP 400 Bad Request with {@code status}, {@code message}, and {@code timestamp}
+     * in the error body.
+     *
+     * <p>Endpoint: {@code POST /api/v1/exchanges}
+     */
     @Test
     void shouldReturn400WhenInsufficientBalance() {
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        {
-                          "userId": "%s",
-                          "fromCurrency": "USD",
-                          "toCurrency": "EUR",
-                          "amount": %.2f
-                        }
-                        """.formatted(TEST_USER, INSUFFICIENT_AMOUNT))
-                .when()
-                .post("/api/v1/exchanges")
-                .then()
-                .statusCode(HttpStatus.BAD_REQUEST.value())
-                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
-                .body("message", notNullValue())
-                .body("timestamp", notNullValue());
+        // TODO: implement
     }
 
+    /**
+     * An exchange where {@code fromCurrency} and {@code toCurrency} are identical
+     * should return HTTP 400 Bad Request with {@code status}, {@code message},
+     * and {@code timestamp} in the error body.
+     *
+     * <p>Endpoint: {@code POST /api/v1/exchanges}
+     */
     @Test
     void shouldReturn400WhenSameCurrency() {
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        {
-                          "userId": "%s",
-                          "fromCurrency": "USD",
-                          "toCurrency": "USD",
-                          "amount": 100.00
-                        }
-                        """.formatted(TEST_USER))
-                .when()
-                .post("/api/v1/exchanges")
-                .then()
-                .statusCode(HttpStatus.BAD_REQUEST.value())
-                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
-                .body("message", notNullValue())
-                .body("timestamp", notNullValue());
+        // TODO: implement
     }
 
+    /**
+     * A request with a blank {@code userId} should fail Bean Validation and return
+     * HTTP 400 Bad Request with {@code status}, {@code errors}, and {@code timestamp}
+     * in the error body.
+     *
+     * <p>Endpoint: {@code POST /api/v1/exchanges}
+     */
     @Test
     void shouldReturn400OnValidationError() {
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        {
-                          "userId": "",
-                          "fromCurrency": "USD",
-                          "toCurrency": "EUR",
-                          "amount": 100.00
-                        }
-                        """)
-                .when()
-                .post("/api/v1/exchanges")
-                .then()
-                .statusCode(HttpStatus.BAD_REQUEST.value())
-                .body("status", equalTo(HttpStatus.BAD_REQUEST.value()))
-                .body("errors", notNullValue())
-                .body("timestamp", notNullValue());
+        // TODO: implement
     }
 
+    /**
+     * An exchange that was just created should be retrievable by its id with HTTP 200 OK
+     * and matching {@code id} and {@code userId} in the response body.
+     *
+     * <p>Endpoint: {@code GET /api/v1/exchanges/{id}}
+     */
     @Test
     void shouldGetExchangeById() {
-        Integer exchangeId = given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        {
-                          "userId": "%s",
-                          "fromCurrency": "USD",
-                          "toCurrency": "EUR",
-                          "amount": 50.00
-                        }
-                        """.formatted(TEST_USER))
-                .when()
-                .post("/api/v1/exchanges")
-                .then()
-                .statusCode(HttpStatus.CREATED.value())
-                .extract().path("id");
-
-        given()
-                .when()
-                .get("/api/v1/exchanges/{id}", exchangeId)
-                .then()
-                .statusCode(HttpStatus.OK.value())
-                .body("id", equalTo(exchangeId))
-                .body("userId", equalTo(TEST_USER));
+        // TODO: implement
     }
 
+    /**
+     * Requesting an exchange with a non-existent id should return HTTP 404 Not Found
+     * with {@code status}, {@code message}, and {@code timestamp} in the error body.
+     *
+     * <p>Endpoint: {@code GET /api/v1/exchanges/{id}}
+     */
     @Test
     void shouldReturn404WhenExchangeNotFound() {
-        given()
-                .when()
-                .get("/api/v1/exchanges/{id}", NON_EXISTENT_ID)
-                .then()
-                .statusCode(HttpStatus.NOT_FOUND.value())
-                .body("status", equalTo(HttpStatus.NOT_FOUND.value()))
-                .body("message", notNullValue())
-                .body("timestamp", notNullValue());
+        // TODO: implement
     }
 
+    /**
+     * When two exchanges exist and page size is 1, the paginated endpoint should
+     * return HTTP 200 OK with exactly 1 exchange per page.
+     *
+     * <p>Endpoint: {@code GET /api/v1/exchanges/user/{userId}?page=0&size=1}
+     */
     @Test
     void shouldGetUserExchangesPaginated() {
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        {"userId":"%s","fromCurrency":"USD","toCurrency":"EUR","amount":10.00}
-                        """.formatted(TEST_USER))
-                .when().post("/api/v1/exchanges")
-                .then().statusCode(HttpStatus.CREATED.value());
-
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        {"userId":"%s","fromCurrency":"USD","toCurrency":"GBP","amount":10.00}
-                        """.formatted(TEST_USER))
-                .when().post("/api/v1/exchanges").then().statusCode(HttpStatus.CREATED.value());
-
-        given()
-                .queryParam("page", 0)
-                .queryParam("size", 1)
-                .when()
-                .get("/api/v1/exchanges/user/{userId}", TEST_USER)
-                .then()
-                .statusCode(HttpStatus.OK.value())
-                .body("$", hasSize(1));
+        // TODO: implement
     }
 
+    /**
+     * When the external rate API returns a server error, the exchange endpoint should
+     * return HTTP 503 Service Unavailable after exhausting all retry attempts.
+     * Override the WireMock stub to return a server error before sending the request.
+     *
+     * <p>Endpoint: {@code POST /api/v1/exchanges}
+     */
     @Test
     void shouldReturn503WhenExternalApiIsDown() {
-        stubFor(get(urlPathEqualTo("/USD"))
-                .willReturn(serverError()));
-
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        {
-                          "userId": "%s",
-                          "fromCurrency": "USD",
-                          "toCurrency": "EUR",
-                          "amount": 100.00
-                        }
-                        """.formatted(TEST_USER))
-                .when()
-                .post("/api/v1/exchanges")
-                .then()
-                .statusCode(HttpStatus.SERVICE_UNAVAILABLE.value())
-                .body("status", equalTo(HttpStatus.SERVICE_UNAVAILABLE.value()))
-                .body("message", notNullValue())
-                .body("timestamp", notNullValue());
-    }
-
-    private void depositBalance(String userId, String currency, double amount) {
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        {
-                          "userId": "%s",
-                          "currency": "%s",
-                          "amount": %s
-                        }
-                        """.formatted(userId, currency, amount))
-                .when()
-                .post("/api/v1/balances/deposit")
-                .then()
-                .statusCode(HttpStatus.CREATED.value());
+        // TODO: implement
     }
 }

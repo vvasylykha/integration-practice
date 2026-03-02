@@ -1,46 +1,41 @@
 package com.example.exchange.integration.migration;
 
-import com.example.exchange.integration.config.TestContainersConfig;
-import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.MigrationState;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
 
-import java.util.Arrays;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@ActiveProfiles("test")
-@Import(TestContainersConfig.class)
+/**
+ * Integration tests verifying Flyway migration state after application startup.
+ *
+ * <p><b>Task:</b> annotate this class to start the Spring context without a web server,
+ * activate the {@code "test"} profile, and import {@code TestContainersConfig}.
+ *
+ * <p>Also inject the {@link org.flywaydb.core.Flyway} bean to inspect migration metadata.
+ */
 class FlywayMigrationIT {
 
-    @Autowired
-    private Flyway flyway;
-
+    /**
+     * There must be at least one applied migration and every applied migration
+     * must have the state {@link MigrationState#SUCCESS}.
+     */
     @Test
     void shouldApplyAllMigrationsSuccessfully() {
-        MigrationInfo[] applied = flyway.info().applied();
-
-        assertThat(applied)
-                .isNotEmpty()
-                .allMatch(m -> m.getState() == MigrationState.SUCCESS);
+        // TODO: implement
     }
 
+    /**
+     * There should be no pending (unapplied) migrations after context startup —
+     * all migration scripts on the classpath must already be applied.
+     */
     @Test
     void shouldHaveNoPendingMigrations() {
-        assertThat(flyway.info().pending()).isEmpty();
+        // TODO: implement
     }
 
+    /**
+     * None of the migrations known to Flyway should be in a {@link MigrationState#FAILED} state.
+     */
     @Test
     void shouldNotHaveFailedMigrations() {
-        MigrationInfo[] all = flyway.info().all();
-
-        assertThat(Arrays.stream(all))
-                .noneMatch(m -> m.getState() == MigrationState.FAILED);
+        // TODO: implement
     }
 }
