@@ -40,7 +40,6 @@ Import the `1-4-integration-test-scratch.postman_collection.json` file into Post
 
 ### Technology Stack
 
-- **Java 21**
 - **Spring Boot 3.5.6**
 - **PostgreSQL 16**
 - **Redis 7**
