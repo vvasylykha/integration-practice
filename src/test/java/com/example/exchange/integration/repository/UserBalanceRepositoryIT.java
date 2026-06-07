@@ -5,9 +5,9 @@ import com.example.exchange.model.UserBalance;
 import com.example.exchange.repository.UserBalanceRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
@@ -19,28 +19,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Repository tests for UserBalanceRepository.
  *
- * UNLIKE the other practice classes, this one is GREEN at the start. The symptom is not a
- * failing assertion — it is SPEED. Watch the run: the full application context (web, AMQP,
- * Redis) is started, and @DirtiesContext throws it away after every method, so the context is
- * rebuilt from scratch for each test. With 8 tests that is painfully slow and the log is full
- * of repeated "Started ... in N seconds".
+ * BP4 — @DataJpaTest loads ONLY the JPA layer (no web/AMQP/Redis), so it is fast and its context
+ * is shared/cached across repository test classes. No @DirtiesContext: the slice wraps each test
+ * in a transaction and rolls it back, so tests stay isolated with zero manual cleanup.
  *
- * TODO (BP4 — Execution Speed & Context Optimization):
- *   A repository test does not need the whole application. Replace @SpringBootTest with the LEAN
- *   slice that loads ONLY JPA beans, and remove @DirtiesContext (the slice rolls back per test
- *   automatically, so there is nothing dirty to clean up). The shared context will then be
- *   cached and reused instead of rebuilt.
- *
- * TODO (BP2 — Infrastructure Realism):
- *   The moment you switch to the JPA slice it will auto-replace the DataSource with the in-memory
- *   H2 that is on the test classpath. Your real Flyway migrations then run against H2 — and the
- *   very first one (BIGSERIAL) is PostgreSQL-only, so the context fails to start. That is the
- *   point: H2 is NOT the database you ship. Disable the auto-replacement so the slice keeps using
- *   the real Testcontainers PostgreSQL, and you are back to testing your actual schema, types,
- *   SELECT ... FOR UPDATE and @Version semantics.
+ * BP2 — @AutoConfigureTestDatabase(replace = NONE) keeps the real Testcontainers PostgreSQL
+ * instead of falling back to in-memory H2. The real Flyway migrations, BIGSERIAL/DECIMAL types,
+ * SELECT ... FOR UPDATE and @Version are all exercised against the database we actually ship.
  */
-@SpringBootTest                                                   // ❌ BP4: loads web/AMQP/Redis just for DB queries
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)  // ❌ BP4: destroys the context cache → rebuilt every test
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Import(TestContainersConfig.class)
 class UserBalanceRepositoryIT {
@@ -68,7 +56,7 @@ class UserBalanceRepositoryIT {
     void shouldFindAllBalancesForUser() {
         repository.saveAndFlush(balance("u-all", "USD", "100.00"));
         repository.saveAndFlush(balance("u-all", "EUR", "200.00"));
-        repository.saveAndFlush(balance("u-other", "USD", "999.00"));   // must NOT be returned
+        repository.saveAndFlush(balance("u-other", "USD", "999.00"));
 
         List<UserBalance> balances = repository.findByUserId("u-all");
 
@@ -86,7 +74,6 @@ class UserBalanceRepositoryIT {
     void shouldAcquirePessimisticLockForUpdate() {
         repository.saveAndFlush(balance("u-lock", "USD", "100.00"));
 
-        // On real PostgreSQL this issues SELECT ... FOR NO KEY UPDATE (a row-level write lock).
         Optional<UserBalance> locked = repository.findByUserIdAndCurrencyForUpdate("u-lock", "USD");
 
         assertThat(locked).isPresent();
@@ -95,19 +82,18 @@ class UserBalanceRepositoryIT {
 
     @Test
     void shouldReturnEmptyWhenLockingNonExistentBalance() {
-        // Locking a row that does not exist returns an empty Optional, not an exception.
         assertThat(repository.findByUserIdAndCurrencyForUpdate("u-nolock", "USD")).isEmpty();
     }
 
     @Test
     void shouldSaveAndIncrementVersionOnUpdate() {
         UserBalance saved = repository.saveAndFlush(balance("u-version", "USD", "10.00"));
-        assertThat(saved.getVersion()).isZero();   // @Version starts at 0
+        assertThat(saved.getVersion()).isZero();
 
         saved.setBalance(new BigDecimal("20.00"));
         UserBalance updated = repository.saveAndFlush(saved);
 
-        assertThat(updated.getVersion()).isEqualTo(1L);   // optimistic-lock version bumped on update
+        assertThat(updated.getVersion()).isEqualTo(1L);
     }
 
     @Test
