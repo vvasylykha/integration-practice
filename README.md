@@ -160,3 +160,22 @@ The test suite is located in `src/test` and follows a structured approach to int
 - **RestAssured** - REST API testing DSL
 - **WireMock** - External API mocking
 - **Awaitility** - Asynchronous testing utilities
+
+## Practice: Integration Testing Best Practices
+
+**What this is:** the test suite intentionally violates four best practices. Your job is to find the symptom, explain the cause, and fix it — not to write infrastructure (Testcontainers and the base test class are already done).
+
+**How to see the problems:** run `mvn test` twice in a row, and once with a shuffled order (`-Dsurefire.runOrder=random`). Tests that depend on shared state or the live network will pass once and fail on re-run / offline.
+
+**The four practices and where they live:**
+
+- **BP1 Test Isolation & Independence** → `BalanceControllerIT`, `ExchangeControllerIT`, `RateControllerIT` (cache), `ExchangeMessagingIT` (idempotency)
+- **BP2 Infrastructure Realism** → `UserBalanceRepositoryIT`
+- **BP3 Stable External Boundaries** → `RateControllerIT`, `ExchangeControllerIT`
+- **BP4 Execution Speed & Context Optimization** → `UserBalanceRepositoryIT`
+
+**Hints baked in:** every spot to fix has a `// TODO (BPx)` comment naming the practice. Search the project for `TODO (BP` to get the full task list.
+
+**Definition of done:** all integration tests pass, stay green across re-runs and random order, run fully offline (no live API), and use real PostgreSQL.
+
+**Reference:** see slides 11–22 for the problem/fix patterns for each practice.
