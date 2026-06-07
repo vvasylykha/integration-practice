@@ -1,0 +1,83 @@
+@startuml
+!theme plain
+skinparam componentStyle rectangle
+skinparam linetype polyline
+
+title Component Architecture
+
+package "Exchange App" {
+
+    package "API Layer (Controllers)" {
+        [ExchangeController] <<REST>> as EC
+        [BalanceController] <<REST>> as BC
+        [RateController] <<REST>> as RC
+    }
+
+    package "Service Layer (Business Logic)" {
+        [ExchangeService] <<Service>> as ES
+        [BalanceService] <<Service>> as BS
+        [RateService] <<Service>> as RS
+        [AuditService] <<Service>> as AS
+    }
+
+    package "Client Layer" {
+        [ExchangeRateApiClient] <<RestClient>> as APIClient
+    }
+
+    package "Messaging Layer (AMQP)" {
+        [RabbitExchangeEventPublisher] <<Publisher>> as Pub
+        [ExchangeEventListener] <<Listener>> as Sub
+    }
+
+    package "Data Access Layer (Repositories)" {
+        [ExchangeRepository] <<JPA>> as ER
+        [UserBalanceRepository] <<JPA>> as UBR
+        [AuditLogRepository] <<JPA>> as ALR
+    }
+}
+
+database "DB (PostgreSQL)" as DB {
+    [exchanges]
+    [user_balances]
+    [audit_log]
+}
+
+database "Cache (Redis)" as Cache {
+    [Rates Cache]
+}
+
+rectangle "Message Broker (RabbitMQ)" as MQ {
+    [exchange-audit-exchange] as Topic
+    [completed/failed queues] as Queues
+}
+
+cloud "External Service" as ExtAPI {
+    [api.exchangerate-api.com/v4/latest]
+}
+
+EC --> ES : uses
+BC --> BS : uses
+RC --> RS : uses
+
+ES --> RS : get exchange rate
+ES --> BS : transfer balance
+ES --> Pub : publish events
+
+ES --> ER : save
+BS --> UBR : save / lock
+RS --> APIClient : fetch rates
+AS --> ALR : save
+
+APIClient --> ExtAPI : HTTP GET (Retryable)
+RS .left.> Cache : @Cacheable \n @CacheEvict
+
+Pub --> Topic : AMQP Message
+Topic --> Queues : Routing
+Queues --> Sub : @RabbitListener
+Sub --> AS : processAuditEvent()
+
+ER --> [exchanges]
+UBR --> [user_balances]
+ALR --> [audit_log]
+
+@enduml

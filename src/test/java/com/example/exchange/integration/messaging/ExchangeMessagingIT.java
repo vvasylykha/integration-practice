@@ -1,25 +1,27 @@
 package com.example.exchange.integration.messaging;
 
+import com.example.exchange.integration.config.TestContainersConfig;
 import com.example.exchange.messaging.event.ExchangeCompletedEvent;
 import com.example.exchange.messaging.event.ExchangeFailedEvent;
+import com.example.exchange.repository.AuditLogRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
-/**
- * Integration tests for RabbitMQ message consumers that persist audit log records.
- *
- * <p><b>Task:</b> annotate this class to configure a Spring Boot integration test
- * for messaging:
- * <ul>
- *   <li>Start the Spring context without a web server (no HTTP endpoints needed).</li>
- *   <li>Activate the {@code "test"} profile.</li>
- *   <li>Import {@code TestContainersConfig} — this class does not extend
- *       {@code ApiIntegrationTest}, so the import must be declared explicitly.</li>
- * </ul>
- *
- * <p>Also inject {@code RabbitTemplate} and {@code AuditLogRepository} fields.
- */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@ActiveProfiles("test")
+@Import(TestContainersConfig.class)
 class ExchangeMessagingIT {
+
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
+
+    @Autowired
+    private AuditLogRepository auditLogRepository;
 
     /**
      * After each test: delete all audit log records to prevent data leaking

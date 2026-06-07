@@ -1,18 +1,39 @@
 package com.example.exchange.integration.controller;
 
 import com.example.exchange.integration.base.ApiIntegrationTest;
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
 
-/**
- * Integration tests for the Rate REST API ({@code /api/v1/rates}),
- *
- * <p><b>Task:</b> add the class-level annotation that starts a WireMock HTTP server
- * on port {@code 8099} before each test. The port matches {@code rate-api.base-url}
- * in {@code application-test.properties}. Stubs are reset between tests, so each
- * test must register its own.
- */
+@WireMockTest(httpPort = 8099)
 class RateControllerIT extends ApiIntegrationTest {
+
+    private static final String USD_RATES_RESPONSE = """
+            {
+              "base": "USD",
+              "date": "2026-03-01",
+              "rates": {
+                "EUR": 0.850000,
+                "GBP": 0.730000
+              }
+            }
+            """;
+
+    private static final String EUR_RATES_RESPONSE = """
+            {
+              "base": "EUR",
+              "date": "2026-03-01",
+              "rates": {
+                "USD": 1.180000,
+                "GBP": 0.860000
+              }
+            }
+            """;
+
+    @Autowired
+    private CacheManager cacheManager;
 
     /**
      * Before each test: clear all Spring Cache entries to prevent cached rates

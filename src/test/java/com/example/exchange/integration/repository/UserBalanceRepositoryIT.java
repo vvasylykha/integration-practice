@@ -1,28 +1,24 @@
 package com.example.exchange.integration.repository;
 
+import com.example.exchange.integration.config.TestContainersConfig;
+import com.example.exchange.repository.UserBalanceRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.Optional;
 
-/**
- * Integration tests for {@link com.example.exchange.repository.UserBalanceRepository},
- * covering query methods, pessimistic/optimistic locking, and existence checks
- * against a real PostgreSQL database.
- *
- * <p><b>Task:</b> annotate this class to configure a JPA test slice:
- * <ul>
- *   <li>Use the Spring Boot slice annotation that loads only JPA components
- *       (no full application context).</li>
- *   <li>Disable auto-replacement of the datasource with an in-memory database
- *       so tests run against real PostgreSQL (required for pessimistic locking).</li>
- *   <li>Activate the {@code "test"} profile.</li>
- *   <li>Import {@code TestContainersConfig}.</li>
- * </ul>
- *
- * <p>Also declare and inject the repository field. Each test runs in a transaction
- * that is rolled back automatically — no manual cleanup needed.
- */
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@ActiveProfiles("test")
+@Import(TestContainersConfig.class)
 class UserBalanceRepositoryIT {
+
+    @Autowired
+    private UserBalanceRepository userBalanceRepository;
 
     /**
      * Finding a balance by userId and currency should return a present {@link Optional}

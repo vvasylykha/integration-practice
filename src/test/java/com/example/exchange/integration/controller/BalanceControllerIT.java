@@ -1,17 +1,17 @@
 package com.example.exchange.integration.controller;
 
 import com.example.exchange.integration.base.ApiIntegrationTest;
+import com.example.exchange.repository.UserBalanceRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 
-/**
- * Integration tests for the Balance REST API ({@code /api/v1/balances}).
- *
- * <p><b>Task:</b> declare the required fields, implement the {@code @AfterEach} cleanup,
- * and implement each test method using the RestAssured Given-When-Then DSL.
- */
 class BalanceControllerIT extends ApiIntegrationTest {
 
+    private static final String TEST_USER = "balance-test-user";
+
+    @Autowired
+    private UserBalanceRepository userBalanceRepository;
 
     /**
      * Delete all balance records created during the test to prevent data leaking
