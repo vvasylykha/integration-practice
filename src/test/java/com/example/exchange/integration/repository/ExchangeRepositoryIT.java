@@ -6,11 +6,11 @@ import com.example.exchange.model.Exchange.ExchangeStatus;
 import com.example.exchange.repository.ExchangeRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
@@ -24,23 +24,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Component diagram (Data Access slice — ExchangeRepository -> exchanges):
  *   diagrams/png/ExchangeController Component Architecture.png
  *
- * UNLIKE the BP2 class, this one is GREEN at the start. The symptom is not a failing assertion —
- * it is SPEED. Watch the run: @SpringBootTest starts the FULL application context (web, AMQP,
- * Redis) just to run a few DB queries, and @DirtiesContext throws that context away after EVERY
- * method, so it is rebuilt from scratch for each test. With these tests the log fills with repeated
- * "Started ... in N seconds" and the suite is painfully slow.
- *
- * TODO (REQUIRED):
- *   BP4 — Execution Speed & Context Optimization
- *   Remove @DirtiesContext. There is nothing "dirty" to clean: each test already uses its OWN
- *   unique userId, and @DirtiesContext does NOT reset the database anyway (the Testcontainers
- *   PostgreSQL is a static, shared container) — all it does is destroy the Spring context cache.
- *   Drop it and the single context is built once and reused across every test → the suite runs in
- *   a fraction of the time.
- *
+ * BP4 — @DataJpaTest loads ONLY the JPA layer (no web/AMQP/Redis), so it is fast and its context
+ * is shared/cached across repository test classes instead of being rebuilt per method. No
+ * @DirtiesContext: the slice wraps each test in a transaction and rolls it back, so tests stay
+ * isolated with zero manual cleanup. @AutoConfigureTestDatabase(replace = NONE) keeps the real
+ * Testcontainers PostgreSQL (see BP2 in UserBalanceRepositoryIT) instead of falling back to H2.
  */
-@SpringBootTest                                                               // ❌ BP4: loads web/AMQP/Redis just for DB queries
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)  // ❌ BP4: destroys the context cache → rebuilt every test
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Import(TestContainersConfig.class)
 class ExchangeRepositoryIT {

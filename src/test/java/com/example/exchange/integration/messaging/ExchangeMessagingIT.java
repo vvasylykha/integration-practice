@@ -2,7 +2,9 @@ package com.example.exchange.integration.messaging;
 
 import com.example.exchange.integration.config.TestContainersConfig;
 import com.example.exchange.messaging.event.ExchangeCompletedEvent;
+import com.example.exchange.messaging.event.ExchangeFailedEvent;
 import com.example.exchange.repository.AuditLogRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,87 +13,101 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 import static com.example.exchange.config.RabbitMQConfig.AUDIT_COMPLETED_ROUTING_KEY;
 import static com.example.exchange.config.RabbitMQConfig.AUDIT_EXCHANGE;
+import static com.example.exchange.config.RabbitMQConfig.AUDIT_FAILED_ROUTING_KEY;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /**
- * Messaging integration tests: a published exchange event must be consumed and persisted to
- * audit_log, and the consumer must be idempotent under at-least-once delivery.
+ * Messaging integration tests: a published exchange event is consumed and persisted to audit_log,
+ * and the consumer is idempotent under at-least-once delivery.
  *
  * Component diagram (Messaging slice — RabbitMQ -> ExchangeEventListener -> AuditService ->
  *   AuditLogRepository -> audit_log): diagrams/png/ExchangeController Component Architecture.png
  *
- *  TODO (REQUIRED):
- *   BP1 — Test Isolation & Independence
- *   There is no cleanup. audit_log has a UNIQUE constraint on (exchange_id, event_type), and the
- *   consumer skips events it has already processed. So a row left by one run makes the next run
- *   see a record that "already exists" — the idempotency assertions then pass or fail depending
- *   on history, not on this test. Add an @AfterEach that deletes all audit_log rows.
- *
- * TODO (REQUIRED):
- *   BP1 — Test Isolation & Independence
- *   Messaging is asynchronous: convertAndSend() returns immediately, the listener persists the
- *   audit row a moment later on another thread. Asserting right after sending reads the DB BEFORE
- *   the consumer has run, so the test is flaky. Use Awaitility to wait for the expected state
- *   instead of asserting synchronously.
+ * BP1 — each test cleans audit_log in @AfterEach, so a fixed exchangeId can be reused safely and
+ * the UNIQUE (exchange_id, event_type) constraint never collides across runs. Because consumption
+ * is asynchronous, every assertion goes through Awaitility: we wait for the expected state rather
+ * than reading the DB before the listener thread has run.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("test")
 @Import(TestContainersConfig.class)
 class ExchangeMessagingIT {
 
+    private static final Duration TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration HOLD = Duration.ofSeconds(2);
+
     @Autowired
     RabbitTemplate rabbitTemplate;
     @Autowired
     AuditLogRepository auditLogRepository;
 
-    // TODO (REQUIRED):
-    //  add @AfterEach that deletes all audit_log rows so a fixed exchangeId can be
-    //  reused across runs without colliding on the UNIQUE (exchange_id, event_type).
+    @AfterEach
+    void cleanUp() {
+        auditLogRepository.deleteAll();
+    }
 
     @Test
     void shouldCreateAuditLogWhenExchangeCompletedEventReceived() {
-        // WHAT IT TESTS: publishing an ExchangeCompletedEvent (routing key audit.completed) leads
-        //   to exactly one audit_log row with event_type "COMPLETED" and the event's data. Wait for
-        //   the row with Awaitility instead of reading immediately (BP1 — async timing).
         long exchangeId = 5001L;
         rabbitTemplate.convertAndSend(AUDIT_EXCHANGE, AUDIT_COMPLETED_ROUTING_KEY,
                 completedEvent(exchangeId, "user123"));
 
-        // ❌ BP1: reads the DB immediately, before the listener thread has persisted anything → flaky
-        var log = auditLogRepository.findByExchangeIdAndEventType(exchangeId, "COMPLETED");
-        assertThat(log).isPresent();
-        assertThat(log.get().getUserId()).isEqualTo("user123");
-        assertThat(log.get().getDetails()).isNotBlank();
+        await().atMost(TIMEOUT).untilAsserted(() -> {
+            var log = auditLogRepository.findByExchangeIdAndEventType(exchangeId, "COMPLETED");
+            assertThat(log).isPresent();
+            assertThat(log.get().getUserId()).isEqualTo("user123");
+            assertThat(log.get().getDetails()).isNotBlank();
+        });
+    }
+
+    @Test
+    void shouldCreateAuditLogWhenExchangeFailedEventReceived() {
+        long exchangeId = 5101L;
+        rabbitTemplate.convertAndSend(AUDIT_EXCHANGE, AUDIT_FAILED_ROUTING_KEY,
+                failedEvent(exchangeId, "user123", "Rate provider unavailable"));
+
+        await().atMost(TIMEOUT).untilAsserted(() -> {
+            var log = auditLogRepository.findByExchangeIdAndEventType(exchangeId, "FAILED");
+            assertThat(log).isPresent();
+            assertThat(log.get().getDetails()).contains("Rate provider unavailable");
+        });
     }
 
     @Test
     void shouldBeIdempotentWhenDuplicateCompletedEventReceived() {
-        // WHAT IT TESTS: at-least-once delivery — the SAME COMPLETED event delivered twice results
-        //   in exactly ONE audit_log row (UNIQUE (exchange_id, event_type) + consumer skips known
-        //   events). Needs cleanup (@AfterEach) so the fixed id starts clean, and Awaitility to
-        //   wait for the steady state (BP1).
         long exchangeId = 5002L;
         var event = completedEvent(exchangeId, "user123");
 
-        // ❌ BP1: same fixed exchangeId on every run; with no cleanup the 2nd run starts dirty
         rabbitTemplate.convertAndSend(AUDIT_EXCHANGE, AUDIT_COMPLETED_ROUTING_KEY, event);
         rabbitTemplate.convertAndSend(AUDIT_EXCHANGE, AUDIT_COMPLETED_ROUTING_KEY, event);
 
-        // ❌ BP1: no async wait — may count 0 (too early) or 1; not a real idempotency check
-        assertThat(auditLogRepository.findByExchangeId(exchangeId)).hasSize(1);
+        // First wait until at least one row is persisted, then assert the count STAYS at 1
+        // throughout the hold window — proving the duplicate did not create a second row.
+        await().atMost(TIMEOUT)
+                .until(() -> auditLogRepository.findByExchangeId(exchangeId).size() == 1);
+        await().during(HOLD).atMost(TIMEOUT).untilAsserted(() ->
+                assertThat(auditLogRepository.findByExchangeId(exchangeId)).hasSize(1));
     }
 
-    // TODO (OPTIONAL):
-    //   Test that publishing an ExchangeFailedEvent (routing key audit.failed) creates one
-    //   audit_log row with event_type "FAILED". Wait with Awaitility (BP1).
+    @Test
+    void shouldBeIdempotentWhenDuplicateFailedEventReceived() {
+        long exchangeId = 5102L;
+        var event = failedEvent(exchangeId, "user123", "Timeout");
 
-    // TODO (OPTIONAL):
-    //   Test that a duplicate FAILED event yields exactly one "FAILED" audit_log row (idempotency
-    //   on the failed path).
+        rabbitTemplate.convertAndSend(AUDIT_EXCHANGE, AUDIT_FAILED_ROUTING_KEY, event);
+        rabbitTemplate.convertAndSend(AUDIT_EXCHANGE, AUDIT_FAILED_ROUTING_KEY, event);
+
+        await().atMost(TIMEOUT)
+                .until(() -> auditLogRepository.findByExchangeId(exchangeId).size() == 1);
+        await().during(HOLD).atMost(TIMEOUT).untilAsserted(() ->
+                assertThat(auditLogRepository.findByExchangeId(exchangeId)).hasSize(1));
+    }
 
     private ExchangeCompletedEvent completedEvent(long exchangeId, String userId) {
         return ExchangeCompletedEvent.builder()
@@ -103,6 +119,17 @@ class ExchangeMessagingIT {
                 .convertedAmount(new BigDecimal("90.00"))
                 .exchangeRate(new BigDecimal("0.90"))
                 .commission(new BigDecimal("0.50"))
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+
+    private ExchangeFailedEvent failedEvent(long exchangeId, String userId, String reason) {
+        return ExchangeFailedEvent.builder()
+                .exchangeId(exchangeId)
+                .userId(userId)
+                .fromCurrency("USD")
+                .toCurrency("EUR")
+                .errorMessage(reason)
                 .timestamp(LocalDateTime.now())
                 .build();
     }

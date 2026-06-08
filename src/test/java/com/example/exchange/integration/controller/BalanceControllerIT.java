@@ -2,87 +2,143 @@ package com.example.exchange.integration.controller;
 
 import com.example.exchange.integration.base.ApiIntegrationTest;
 import com.example.exchange.repository.UserBalanceRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.Map;
+import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static io.restassured.http.ContentType.JSON;
+import static org.hamcrest.Matchers.comparesEqualTo;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.hasItems;
+import static org.hamcrest.Matchers.notNullValue;
 
 /**
  * Integration tests for the Balance API (/api/v1/balances).
  *
  * Component diagram: diagrams/png/BalanceController Component Architecture.png
  *   (BalanceController -> BalanceService -> UserBalanceRepository -> user_balances)
+ *
+ * BP1 (Test Isolation) — every test creates its own user with a unique id, so counts and amounts
+ * are deterministic regardless of execution order, and @AfterEach removes all balances so nothing
+ * leaks between tests or across re-runs. @Transactional is intentionally NOT used: these tests
+ * cross a real HTTP boundary, so the server commits in its own transaction and explicit cleanup
+ * is required.
  */
 class BalanceControllerIT extends ApiIntegrationTest {
 
     @Autowired
     UserBalanceRepository userBalanceRepository;
 
-    // TODO (REQUIRED):
-    //  BP1 — Test Isolation & Independence
-    //  There is no cleanup. Records from one test leak into the next,
-    //  so the suite passes once and fails on re-run / random order.
-    //  Add an @AfterEach that removes the data this test created.
+    @AfterEach
+    void cleanUp() {
+        userBalanceRepository.deleteAll();
+    }
 
     @Test
     void shouldDepositAndReturn201() {
-        // WHAT IT TESTS: happy path POST /api/v1/balances/deposit → 201 and a BalanceResponse
-        //   whose balance equals the amount THIS test deposited (use a unique userId per test).
-        //
-        // ❌ BP1: hard-coded shared user. Re-running accumulates balance and breaks the assertion.
-        given().contentType(JSON).body(depositBody("user123", "USD", "1000.00"))
+        String userId = uniqueUser();
+
+        given().contentType(JSON).body(depositBody(userId, "USD", "1000.00"))
                 .when().post("/api/v1/balances/deposit")
                 .then().statusCode(201)
-                .body("balance", equalTo(1000.00f)); // assert on data this test created, not an absolute value
+                .body("userId", equalTo(userId))
+                .body("currency", equalTo("USD"))
+                .body("balance", comparesEqualTo(1000.00f));
     }
 
     @Test
     void shouldGetAllBalancesForUser() {
-        // WHAT IT TESTS: GET /api/v1/balances/{userId} → 200 with all balances of that user.
-        //   Deposit two currencies for a UNIQUE userId, expect exactly 2 entries (count must be
-        //   deterministic regardless of execution order — BP1).
-        deposit("user123", "USD", "100.00");
-        deposit("user123", "EUR", "200.00");
-        // ❌ BP1: same shared "user123" as other tests → size depends on execution order
-        given().when().get("/api/v1/balances/user123")
+        String userId = uniqueUser();
+        deposit(userId, "USD", "100.00");
+        deposit(userId, "EUR", "200.00");
+
+        // Unique user => exactly the two balances this test created, never another test's data.
+        given().when().get("/api/v1/balances/" + userId)
                 .then().statusCode(200)
-                .body("$", hasSize(2));  // use a unique userId per test so the count is deterministic
+                .body("$", hasSize(2))
+                .body("currency", hasItems("USD", "EUR"));
     }
 
-    // TODO (REQUIRED):
-    //   Test GET /api/v1/balances/{userId}/{currency} → 200 with the BalanceResponse for that
-    //   single currency, matching the amount this test deposited (unique userId, BP1).
+    @Test
+    void shouldGetSpecificBalance() {
+        String userId = uniqueUser();
+        deposit(userId, "USD", "100.00");
 
-    // TODO (REQUIRED):
-    //   Test GET /api/v1/balances/{userId}/{currency} for a user/currency that was never created
-    //   → 404. Use a unique, guaranteed-absent userId (BP1).
+        given().when().get("/api/v1/balances/" + userId + "/USD")
+                .then().statusCode(200)
+                .body("userId", equalTo(userId))
+                .body("currency", equalTo("USD"))
+                .body("balance", comparesEqualTo(100.00f));
+    }
 
-    // TODO (OPTIONAL):
-    //   Test GET /api/v1/balances/{userId} for a user with no balances → 200 and an empty array
-    //   (not 404).
+    @Test
+    void shouldReturn404WhenBalanceNotFound() {
+        // Fresh unique user with no deposits -> the specific-balance lookup is 404.
+        given().when().get("/api/v1/balances/" + uniqueUser() + "/USD")
+                .then().statusCode(404)
+                .body("status", equalTo(404))
+                .body("message", notNullValue())
+                .body("timestamp", notNullValue());
+    }
 
-    // TODO (OPTIONAL):
-    //   Test POST deposit with a non 3-letter currency code → 400 with an error body.
+    @Test
+    void shouldReturnEmptyListWhenUserHasNoBalances() {
+        // Listing balances for a user with no records is 200 with an empty array (not 404).
+        given().when().get("/api/v1/balances/" + uniqueUser())
+                .then().statusCode(200)
+                .body("$", empty());
+    }
 
-    // TODO (OPTIONAL):
-    //   Test POST deposit with a negative (or zero) amount → 400.
+    @Test
+    void shouldReturn400OnInvalidCurrencyCode() {
+        // 2-letter code fails @ValidCurrencyCode on the path variable -> ConstraintViolation -> 400.
+        given().when().get("/api/v1/balances/" + uniqueUser() + "/XX")
+                .then().statusCode(400)
+                .body("status", equalTo(400))
+                .body("errors", notNullValue())
+                .body("timestamp", notNullValue());
+    }
 
-    // TODO (OPTIONAL):
-    //   Test POST deposit with a blank userId → 400.
+    @Test
+    void shouldReturn400OnNegativeDepositAmount() {
+        // @DecimalMin on the request body rejects a non-positive amount.
+        given().contentType(JSON).body(depositBody(uniqueUser(), "USD", "-50.00"))
+                .when().post("/api/v1/balances/deposit")
+                .then().statusCode(400)
+                .body("status", equalTo(400))
+                .body("errors", notNullValue())
+                .body("timestamp", notNullValue());
+    }
 
+    @Test
+    void shouldReturn400WhenUserIdIsBlank() {
+        // @NotBlank on userId -> MethodArgumentNotValidException -> 400 with errors map.
+        given().contentType(JSON).body(depositBody("", "USD", "100.00"))
+                .when().post("/api/v1/balances/deposit")
+                .then().statusCode(400)
+                .body("status", equalTo(400))
+                .body("errors", notNullValue());
+    }
+
+    private String uniqueUser() {
+        return "user-" + UUID.randomUUID();
+    }
+
+    // performs the deposit (setup action)
     private void deposit(String userId, String currency, String amount) {
         given().contentType(JSON).body(depositBody(userId, currency, amount))
                 .when().post("/api/v1/balances/deposit")
                 .then().statusCode(201);
     }
 
+    // builds the request body (for the explicit deposit test)
     private Map<String, Object> depositBody(String userId, String currency, String amount) {
         return Map.of("userId", userId, "currency", currency, "amount", amount);
     }
-
 }

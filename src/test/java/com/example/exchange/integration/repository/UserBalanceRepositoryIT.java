@@ -1,13 +1,14 @@
 package com.example.exchange.integration.repository;
 
+import com.example.exchange.integration.config.TestContainersConfig;
 import com.example.exchange.model.UserBalance;
 import com.example.exchange.repository.UserBalanceRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -21,40 +22,19 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Component diagram (persistence slice — UserBalanceRepository -> user_balances):
  *   diagrams/png/BalanceController Component Architecture.png
  *
- * This is a lean @DataJpaTest slice that runs against an in-memory H2 (configured below). It looks
- * convincing — 8 of the 9 tests are GREEN. That is exactly the danger: H2 is NOT the database you
- * ship, so a green H2 run gives FALSE CONFIDENCE.
+ * BP2 — @AutoConfigureTestDatabase(replace = NONE) keeps the real Testcontainers PostgreSQL instead
+ * of falling back to in-memory H2. This matters: the production upsert uses PostgreSQL's
+ * INSERT ... ON CONFLICT ... DO UPDATE, which does not exist on H2 — testing on H2 would give a
+ * false green for everything else while leaving that core query unexercisable. On the real database
+ * the Flyway migrations, BIGSERIAL/DECIMAL types, SELECT ... FOR UPDATE and @Version all run for real.
  *
- * The 9th test, shouldUpsertBalanceUsingPostgresOnConflict, FAILS here: upsertBalance() uses
- * PostgreSQL's INSERT ... ON CONFLICT ... DO UPDATE, which simply does not exist on H2. A core
- * query that works in production is untestable on H2 — and even the 8 "green" tests never exercise
- * the real PostgreSQL FOR (NO KEY) UPDATE lock, BIGSERIAL or @Version behaviour.
- *
- * (The H2 URL sets DATABASE_TO_LOWER/CASE_INSENSITIVE_IDENTIFIERS only so the real Flyway schema
- *  even loads — by default H2's identifier casing leaves Hibernate unable to find the tables. Those
- *  flags still do NOT add ON CONFLICT, which is the whole point.)
- *
- *  TODO (REQUIRED):
- *   BP2 — Infrastructure Realism
- *   Stop testing against H2. Use the real database you ship by removing the H2 @TestPropertySource
- *   and pointing the slice at Testcontainers PostgreSQL:
- *     @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
- *     @Import(TestContainersConfig.class)
- *   Then ON CONFLICT works, all 9 tests pass, and you are genuinely testing your production schema,
- *   types, locks and optimistic-locking semantics.
- *
+ * BP4 — @DataJpaTest loads ONLY the JPA layer and rolls each test back in its own transaction, so
+ * the slice is fast and isolated without @DirtiesContext (see ExchangeRepositoryIT for the speed point).
  */
-
 @DataJpaTest
-@ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@TestPropertySource(properties = {
-        // ❌ BP2: an in-memory H2 standing in for production PostgreSQL
-        "spring.datasource.url=jdbc:h2:mem:bp2;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE",
-        "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.datasource.username=sa",
-        "spring.datasource.password="
-})
+@ActiveProfiles("test")
+@Import(TestContainersConfig.class)
 class UserBalanceRepositoryIT {
 
     @Autowired
@@ -129,11 +109,6 @@ class UserBalanceRepositoryIT {
 
     @Test
     void shouldUpsertBalanceUsingPostgresOnConflict() {
-        // ❌ BP2: upsertBalance() is PostgreSQL INSERT ... ON CONFLICT ... DO UPDATE. On H2 this
-        //         throws a syntax error (no such clause), so the test fails — even though the
-        //         feature works perfectly on the production database. Run on Testcontainers
-        //         PostgreSQL (the BP2 fix) and it goes green: first call inserts, second hits the
-        //         conflict and adds to the existing balance.
         repository.upsertBalance("u-upsert", "USD", new BigDecimal("100.00"));
         repository.upsertBalance("u-upsert", "USD", new BigDecimal("25.00"));
 
