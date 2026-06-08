@@ -1,0 +1,53 @@
+@startuml
+!theme plain
+skinparam componentStyle rectangle
+skinparam linetype polyline
+
+title ExchangeController Component Architecture
+
+package "API Layer" {
+    [ExchangeController] <<REST>> as EC
+}
+
+package "Service Layer" {
+    [ExchangeService] <<Service>> as ES
+    [BalanceService] <<Service>> as BS
+    [RateService] <<Service>> as RS
+    [AuditService] <<Service>> as AS
+}
+
+package "Messaging Layer" {
+    [RabbitExchangeEventPublisher] <<Publisher>> as Pub
+    [ExchangeEventListener] <<Listener>> as Sub
+}
+
+package "Data Access Layer" {
+    [ExchangeRepository] <<JPA>> as ER
+    [AuditLogRepository] <<JPA>> as ALR
+}
+
+database "DB (PostgreSQL)" as DB {
+    [exchanges]
+    [audit_log]
+}
+
+rectangle "Message Broker (RabbitMQ)" as MQ {
+    [exchange-audit-exchange] as Topic
+    [completed/failed queues] as Queues
+}
+
+EC --> ES : uses
+ES --> RS : get exchange rate
+ES --> BS : transfer balance
+ES --> ER : save
+ER --> [exchanges]
+
+ES --> Pub : publish events
+Pub --> Topic : AMQP Message
+Topic --> Queues : Routing
+Queues --> Sub : @RabbitListener
+Sub --> AS : processAuditEvent()
+AS --> ALR : save
+ALR --> [audit_log]
+
+@enduml

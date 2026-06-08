@@ -38,6 +38,20 @@ Import the `1-4-integration-test-scratch.postman_collection.json` file into Post
 
 ## Project Architecture
 
+### Architecture Diagram
+
+The overall component architecture is shown below (rendered from the PlantUML source in
+`diagrams/component_diagram.puml`). It shows the full request and event flow across every layer —
+controllers → services → repositories / API client / event publisher → listener — together with the
+backing infrastructure: PostgreSQL, the Redis rates cache, the RabbitMQ audit exchange/queues and the
+external exchange-rate API.
+
+![Component Architecture](diagrams/png/Component%20Architecture.png)
+
+Each test class in the practice below also links to a **focused slice** of this diagram that highlights
+only the components that class exercises, so you can see exactly which part of the system each
+integration test covers.
+
 ### Technology Stack
 
 - **Spring Boot 3.5.6**
@@ -163,19 +177,64 @@ The test suite is located in `src/test` and follows a structured approach to int
 
 ## Practice: Integration Testing Best Practices
 
-**What this is:** the test suite intentionally violates four best practices. Your job is to find the symptom, explain the cause, and fix it — not to write infrastructure (Testcontainers and the base test class are already done).
+### Prerequisite: Docker must be running
 
-**How to see the problems:** run `mvn test` twice in a row, and once with a shuffled order (`-Dsurefire.runOrder=random`). Tests that depend on shared state or the live network will pass once and fail on re-run / offline.
+Every test class uses **Testcontainers**, which starts PostgreSQL, Redis and RabbitMQ in Docker on
+demand. **Start Docker (Docker Desktop / the Docker daemon) before running any test** — otherwise the
+containers cannot be created and the tests fail at startup. You do **not** need to run
+`docker-compose up` for the tests: Testcontainers manages those containers itself (the Compose file is
+only for running the application manually).
 
-**The four practices and where they live:**
+Run the suite with:
 
-- **BP1 Test Isolation & Independence** → `BalanceControllerIT`, `ExchangeControllerIT`, `RateControllerIT` (cache), `ExchangeMessagingIT` (idempotency)
-- **BP2 Infrastructure Realism** → `UserBalanceRepositoryIT`
-- **BP3 Stable External Boundaries** → `RateControllerIT`, `ExchangeControllerIT`
-- **BP4 Execution Speed & Context Optimization** → `UserBalanceRepositoryIT`
+```bash
+mvn test
+```
 
-**Hints baked in:** every spot to fix has a `// TODO (BPx)` comment naming the practice. Search the project for `TODO (BP` to get the full task list.
+### What this is
 
-**Definition of done:** all integration tests pass, stay green across re-runs and random order, run fully offline (no live API), and use real PostgreSQL.
+The suite intentionally violates four best practices (BP1–BP4), and many test methods are left as
+`// TODO` stubs. Working class by class, you fix the violation and implement the tests. Each stub is
+marked **REQUIRED** or **OPTIONAL**:
 
-**Reference:** see slides 11–22 for the problem/fix patterns for each practice.
+- **REQUIRED** — the baseline tests every real suite is expected to have (happy path + the core
+  error/validation cases). Do these first.
+- **OPTIONAL** — broaden coverage to edge cases, caching, retries and resilience.
+
+### Recommended order
+
+Work through the classes in the order below. It climbs from the simplest layer (persistence) to the
+most complex (asynchronous messaging), adding one technology at a time. The basic scenario is: complete
+the **REQUIRED** tests of each class in this order, so you cover the core behaviour of every component
+before moving on to harder technologies and the OPTIONAL cases.
+
+**1. `ExchangeRepositoryIT`** — BP4 (Execution Speed & Context Optimization)
+- *Stack:* JPA repository + Testcontainers PostgreSQL.
+- *Diagram:* [`ExchangeController Component Architecture.png`](diagrams/png/ExchangeController%20Component%20Architecture.png) — exercises the Data Access slice only (`ExchangeRepository → exchanges`).
+
+**2. `UserBalanceRepositoryIT`** — BP2 (Infrastructure Realism)
+- *Stack:* JPA repository + PostgreSQL-specific SQL.
+- *Diagram:* [`BalanceController Component Architecture.png`](diagrams/png/BalanceController%20Component%20Architecture.png) — exercises the persistence slice only (`UserBalanceRepository → user_balances`).
+
+**3. `BalanceControllerIT`** — BP1 (Test Isolation & Independence)
+- *Stack:* full web context + RestAssured (HTTP) + PostgreSQL.
+- *Diagram:* [`BalanceController Component Architecture.png`](diagrams/png/BalanceController%20Component%20Architecture.png) — `BalanceController → BalanceService → UserBalanceRepository → user_balances`.
+
+**4. `RateControllerIT`** — BP1 (Redis cache) + BP3 (Stable External Boundaries)
+- *Stack:* web + Redis cache + WireMock.
+- *Diagram:* [`RateController Integration Scope.png`](diagrams/png/RateController%20Integration%20Scope.png) — `RateController → RateService → ExchangeRateApiClient → external API`, with the Redis rates cache.
+
+**5. `ExchangeControllerIT`** — BP1 (Test Isolation) + BP3 (Stable External Boundaries)
+- *Stack:* web + PostgreSQL + WireMock (external rate API).
+- *Diagram:* [`ExchangeController Component Architecture.png`](diagrams/png/ExchangeController%20Component%20Architecture.png) — the full exchange flow: `ExchangeController → services → ExchangeRepository`, plus the published audit event.
+
+**6. `ExchangeMessagingIT`** — BP1 (async timing & idempotency)
+- *Stack:* RabbitMQ messaging + Awaitility (async).
+- *Diagram:* [`ExchangeController Component Architecture.png`](diagrams/png/ExchangeController%20Component%20Architecture.png) — the Messaging slice (`RabbitMQ → ExchangeEventListener → AuditService → AuditLogRepository → audit_log`).
+
+### Definition of done
+
+All integration tests pass, stay green across re-runs and random order (`-Dsurefire.runOrder=random`),
+run fully offline (no live API — WireMock instead), and use real PostgreSQL via Testcontainers.
+
+**Reference:** see slides 11–22 for the problem/fix pattern of each practice.

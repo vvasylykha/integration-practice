@@ -1,0 +1,28 @@
+@startuml
+!theme plain
+skinparam componentStyle rectangle
+skinparam linetype polyline
+
+title BalanceController Component Architecture
+
+package "API Layer" {
+    [BalanceController] <<REST>> as BC
+}
+
+package "Service Layer" {
+    [BalanceService] <<Service>> as BS
+}
+
+package "Data Access Layer" {
+    [UserBalanceRepository] <<JPA>> as UBR
+}
+
+database "DB (PostgreSQL)" as DB {
+    [user_balances]
+}
+
+BC --> BS : uses
+BS --> UBR : save / lock
+UBR --> [user_balances]
+
+@enduml

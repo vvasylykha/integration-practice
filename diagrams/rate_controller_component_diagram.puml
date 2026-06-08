@@ -1,0 +1,33 @@
+@startuml
+!theme plain
+skinparam componentStyle rectangle
+skinparam linetype polyline
+
+title RateController Integration Scope
+
+package "API Layer" {
+    [RateController] <<REST>> as RC
+}
+
+package "Service Layer" {
+    [RateService] <<Service>> as RS
+}
+
+package "Client Layer" {
+    [ExchangeRateApiClient] <<RestClient>> as APIClient
+}
+
+database "Cache (Redis)" as Cache {
+    [Rates Cache]
+}
+
+cloud "External Service" as ExtAPI {
+    [api.exchangerate-api.com]
+}
+
+RC --> RS : uses
+RS --> APIClient : fetch rates
+RS .left.> Cache : @Cacheable / @CacheEvict
+APIClient --> ExtAPI : HTTP GET
+
+@enduml

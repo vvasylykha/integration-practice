@@ -1,14 +1,13 @@
 package com.example.exchange.integration.repository;
 
-import com.example.exchange.integration.config.TestContainersConfig;
 import com.example.exchange.model.UserBalance;
 import com.example.exchange.repository.UserBalanceRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
-import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -17,32 +16,45 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Repository tests for UserBalanceRepository.
+ * Repository tests for UserBalanceRepository — PRACTICE: BP2 (Infrastructure Realism).
  *
- * UNLIKE the other practice classes, this one is GREEN at the start. The symptom is not a
- * failing assertion — it is SPEED. Watch the run: the full application context (web, AMQP,
- * Redis) is started, and @DirtiesContext throws it away after every method, so the context is
- * rebuilt from scratch for each test. With 8 tests that is painfully slow and the log is full
- * of repeated "Started ... in N seconds".
+ * Component diagram (persistence slice — UserBalanceRepository -> user_balances):
+ *   diagrams/png/BalanceController Component Architecture.png
  *
- * TODO (BP4 — Execution Speed & Context Optimization):
- *   A repository test does not need the whole application. Replace @SpringBootTest with the LEAN
- *   slice that loads ONLY JPA beans, and remove @DirtiesContext (the slice rolls back per test
- *   automatically, so there is nothing dirty to clean up). The shared context will then be
- *   cached and reused instead of rebuilt.
+ * This is a lean @DataJpaTest slice that runs against an in-memory H2 (configured below). It looks
+ * convincing — 8 of the 9 tests are GREEN. That is exactly the danger: H2 is NOT the database you
+ * ship, so a green H2 run gives FALSE CONFIDENCE.
  *
- * TODO (BP2 — Infrastructure Realism):
- *   The moment you switch to the JPA slice it will auto-replace the DataSource with the in-memory
- *   H2 that is on the test classpath. Your real Flyway migrations then run against H2 — and the
- *   very first one (BIGSERIAL) is PostgreSQL-only, so the context fails to start. That is the
- *   point: H2 is NOT the database you ship. Disable the auto-replacement so the slice keeps using
- *   the real Testcontainers PostgreSQL, and you are back to testing your actual schema, types,
- *   SELECT ... FOR UPDATE and @Version semantics.
+ * The 9th test, shouldUpsertBalanceUsingPostgresOnConflict, FAILS here: upsertBalance() uses
+ * PostgreSQL's INSERT ... ON CONFLICT ... DO UPDATE, which simply does not exist on H2. A core
+ * query that works in production is untestable on H2 — and even the 8 "green" tests never exercise
+ * the real PostgreSQL FOR (NO KEY) UPDATE lock, BIGSERIAL or @Version behaviour.
+ *
+ * (The H2 URL sets DATABASE_TO_LOWER/CASE_INSENSITIVE_IDENTIFIERS only so the real Flyway schema
+ *  even loads — by default H2's identifier casing leaves Hibernate unable to find the tables. Those
+ *  flags still do NOT add ON CONFLICT, which is the whole point.)
+ *
+ *  TODO (REQUIRED):
+ *   BP2 — Infrastructure Realism
+ *   Stop testing against H2. Use the real database you ship by removing the H2 @TestPropertySource
+ *   and pointing the slice at Testcontainers PostgreSQL:
+ *     @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+ *     @Import(TestContainersConfig.class)
+ *   Then ON CONFLICT works, all 9 tests pass, and you are genuinely testing your production schema,
+ *   types, locks and optimistic-locking semantics.
+ *
  */
-@SpringBootTest                                                   // ❌ BP4: loads web/AMQP/Redis just for DB queries
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)  // ❌ BP4: destroys the context cache → rebuilt every test
+
+@DataJpaTest
 @ActiveProfiles("test")
-@Import(TestContainersConfig.class)
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@TestPropertySource(properties = {
+        // ❌ BP2: an in-memory H2 standing in for production PostgreSQL
+        "spring.datasource.url=jdbc:h2:mem:bp2;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.datasource.username=sa",
+        "spring.datasource.password="
+})
 class UserBalanceRepositoryIT {
 
     @Autowired
@@ -68,7 +80,7 @@ class UserBalanceRepositoryIT {
     void shouldFindAllBalancesForUser() {
         repository.saveAndFlush(balance("u-all", "USD", "100.00"));
         repository.saveAndFlush(balance("u-all", "EUR", "200.00"));
-        repository.saveAndFlush(balance("u-other", "USD", "999.00"));   // must NOT be returned
+        repository.saveAndFlush(balance("u-other", "USD", "999.00"));
 
         List<UserBalance> balances = repository.findByUserId("u-all");
 
@@ -85,8 +97,6 @@ class UserBalanceRepositoryIT {
     @Test
     void shouldAcquirePessimisticLockForUpdate() {
         repository.saveAndFlush(balance("u-lock", "USD", "100.00"));
-
-        // On real PostgreSQL this issues SELECT ... FOR NO KEY UPDATE (a row-level write lock).
         Optional<UserBalance> locked = repository.findByUserIdAndCurrencyForUpdate("u-lock", "USD");
 
         assertThat(locked).isPresent();
@@ -95,19 +105,18 @@ class UserBalanceRepositoryIT {
 
     @Test
     void shouldReturnEmptyWhenLockingNonExistentBalance() {
-        // Locking a row that does not exist returns an empty Optional, not an exception.
         assertThat(repository.findByUserIdAndCurrencyForUpdate("u-nolock", "USD")).isEmpty();
     }
 
     @Test
     void shouldSaveAndIncrementVersionOnUpdate() {
         UserBalance saved = repository.saveAndFlush(balance("u-version", "USD", "10.00"));
-        assertThat(saved.getVersion()).isZero();   // @Version starts at 0
+        assertThat(saved.getVersion()).isZero();
 
         saved.setBalance(new BigDecimal("20.00"));
         UserBalance updated = repository.saveAndFlush(saved);
 
-        assertThat(updated.getVersion()).isEqualTo(1L);   // optimistic-lock version bumped on update
+        assertThat(updated.getVersion()).isEqualTo(1L);
     }
 
     @Test
@@ -116,6 +125,21 @@ class UserBalanceRepositoryIT {
 
         assertThat(repository.existsByUserIdAndCurrency("u-exists", "USD")).isTrue();
         assertThat(repository.existsByUserIdAndCurrency("u-exists", "EUR")).isFalse();
+    }
+
+    @Test
+    void shouldUpsertBalanceUsingPostgresOnConflict() {
+        // ❌ BP2: upsertBalance() is PostgreSQL INSERT ... ON CONFLICT ... DO UPDATE. On H2 this
+        //         throws a syntax error (no such clause), so the test fails — even though the
+        //         feature works perfectly on the production database. Run on Testcontainers
+        //         PostgreSQL (the BP2 fix) and it goes green: first call inserts, second hits the
+        //         conflict and adds to the existing balance.
+        repository.upsertBalance("u-upsert", "USD", new BigDecimal("100.00"));
+        repository.upsertBalance("u-upsert", "USD", new BigDecimal("25.00"));
+
+        Optional<UserBalance> found = repository.findByUserIdAndCurrency("u-upsert", "USD");
+        assertThat(found).isPresent();
+        assertThat(found.get().getBalance()).isEqualByComparingTo("125.00");
     }
 
     private UserBalance balance(String userId, String currency, String amount) {
